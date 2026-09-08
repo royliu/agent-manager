@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.log
 .claude/settings.local.json
+.claude/
+.DS_Store
