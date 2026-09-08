@@ -1,6 +1,6 @@
 {
   "name": "agent-manager",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Run multiple Claude Code / Codex subscriptions on one machine, and run a swarm of agents on them: a named General Manager per project, a task board, four task agents.",
   "type": "module",
   "bin": {

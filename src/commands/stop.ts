@@ -3,7 +3,7 @@ import { resolveSwarmName } from '../swarm/registry.js';
 import { cyan, dim, green } from '../ui/format.js';
 import { noSwarm } from './gm.js';
 
-/** `am stop [name]`: stop the agents and the task manager; the board's state is kept. */
+/** `am gm stop [name]`: stop the agents and the task manager; the board's state is kept. */
 export async function stopCommand(name: string | undefined): Promise<void> {
   const meta = resolveSwarmName(name);
   if (!meta) return noSwarm(name);
@@ -19,5 +19,5 @@ export async function stopCommand(name: string | undefined): Promise<void> {
     /* the socket closes as it stops */
   }
   c.close();
-  console.log(`  ${green('✓')} ${meta.name} stopped. Tasks, notes and agents are kept; ${cyan('am start')} ${dim('here or')} ${cyan(`am gm ${meta.name}`)} ${dim('picks them up.')}`);
+  console.log(`  ${green('✓')} ${meta.name} stopped. Tasks, notes and agents are kept; ${cyan(`am gm ${meta.name}`)} ${dim('picks them up.')}`);
 }

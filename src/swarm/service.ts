@@ -106,7 +106,7 @@ export class TaskManagerService {
   constructor(readonly name: string) {
     this.store = new Store(name);
     const meta = this.store.meta();
-    if (!meta) throw new Error(`swarm "${name}" is not set up; run am start`);
+    if (!meta) throw new Error(`swarm "${name}" is not set up; run am gm start`);
     this.meta = meta;
     this.cfg = loadSwarmConfig();
     const profile = profileByName(meta.profile);
@@ -549,7 +549,7 @@ export class TaskManagerService {
       }
     }
     this.store.save(t);
-    this.event(by, `dispatch requested${t.agent ? ` → ${t.agent}` : ' → next free agent'}`, id);
+    this.event(by, `start requested${t.agent ? ` → ${t.agent}` : ' → next free agent'}`, id);
     this.changed(id);
     void this.tick();
     return t;
@@ -564,14 +564,14 @@ export class TaskManagerService {
     if (!this.agent(agentName)) throw new RpcError(`no agent named ${agentName}`);
     const prev = t.agent;
     if (t.status === 'in_progress' && prev) {
-      this.killAgent(prev, 'reassigned');
-      this.closeRun(t, 'paused', `reassigned to ${agentName}`);
+      this.killAgent(prev, 'moved to another agent');
+      this.closeRun(t, 'paused', `moved to ${agentName}`);
       t.status = 'open';
       t.dispatchRequested = true;
     }
     t.agent = agentName;
     this.store.save(t);
-    this.event(by, `reassigned ${prev ? `from ${prev} ` : ''}→ ${agentName}`, id);
+    this.event(by, `assigned ${prev ? `from ${prev} ` : ''}→ ${agentName}`, id);
     this.changed(id);
     void this.tick();
     return t;
@@ -850,12 +850,12 @@ export class TaskManagerService {
         if (a && !a.paused) this.startRun(t, a, resumeMessage('feedback', `You were stopped mid-task. ${feedback}`, t));
         else void this.tick();
       } else {
-        this.note(t, by, 'decision', 'Stopped. On hold until dispatched again.');
+        this.note(t, by, 'decision', 'Stopped. On hold until started again.');
         t.dispatchRequested = false;
         t.progress = undefined;
         this.store.save(t);
         this.event(by, `stopped ${a?.name ?? 'the agent'}; #${id} is on hold`, id);
-        this.inbox('note', `${by === 'you' ? 'The owner' : by} stopped #${id} ${t.title}${a ? ` (${a.name} is idle again)` : ''}. It is on hold: dispatch it again when it should continue, or cancel it.`, id);
+        this.inbox('note', `${by === 'you' ? 'The owner' : by} stopped #${id} ${t.title}${a ? ` (${a.name} is idle again)` : ''}. It is on hold: start it again when it should continue, or cancel it.`, id);
         this.changed(id);
         void this.tick();
       }
@@ -1038,7 +1038,7 @@ export class TaskManagerService {
   private removeAgent(name: string): boolean {
     const a = this.agent(name);
     if (!a) throw new RpcError(`no agent ${name}`);
-    if (a.state === 'working' || a.state === 'compacting') throw new RpcError(`${name} is working on #${a.taskId}; reassign or cancel that first`);
+    if (a.state === 'working' || a.state === 'compacting') throw new RpcError(`${name} is working on #${a.taskId}; move that task to another agent or cancel it first`);
     this.store.saveTeam(this.store.team().filter((x) => x.name !== name));
     this.event('you', `agent ${name} removed`);
     this.push({ event: 'team' });
@@ -1362,7 +1362,7 @@ export class TaskManagerService {
   }
 
   private mcpConfigFor(a: Agent, t: Task): { file: string; command: { command: string; args: string[] } } {
-    const command = { command: process.execPath, args: [amEntry(), 'mcp', '--swarm', this.name, '--role', 'agent', '--agent', a.name, '--task', String(t.id)] };
+    const command = { command: process.execPath, args: [amEntry(), '_bridge', '--gm', this.name, '--role', 'agent', '--agent', a.name, '--task', String(t.id)] };
     const file = path.join(this.store.paths.dir, `mcp-${a.name}.json`);
     writeJsonAtomic(file, { mcpServers: { swarm: command } });
     return { file, command };
@@ -1529,7 +1529,7 @@ export class TaskManagerService {
       fresh.status = 'open';
       fresh.dispatchRequested = false;
       this.note(fresh, 'task manager', 'finding', `${a.name}'s run ended with an error (exit ${code}); see ${run.log}.`);
-      this.inbox('failed', `${a.name}'s run on #${taskId} ${fresh.title} ended with an error (exit code ${code}). The task is back to open; check ${run.log}, then dispatch again or cancel.`, taskId);
+      this.inbox('failed', `${a.name}'s run on #${taskId} ${fresh.title} ended with an error (exit code ${code}). The task is back to open; check ${run.log}, then start it again or cancel it.`, taskId);
     } else if (a.nudges < 2) {
       // Ended its turn without reporting or asking: nudge once or twice, then give up.
       run.exit = 'paused';
@@ -1552,7 +1552,7 @@ export class TaskManagerService {
       a.rotateSession = true;
       fresh.status = 'open';
       fresh.dispatchRequested = false;
-      this.inbox('failed', `${a.name} stopped twice on #${taskId} ${fresh.title} without reporting. The task is back to open; look at ${run.log}, then dispatch again with a clearer brief or cancel.`, taskId);
+      this.inbox('failed', `${a.name} stopped twice on #${taskId} ${fresh.title} without reporting. The task is back to open; look at ${run.log}, then start it again with a clearer brief or cancel it.`, taskId);
     }
     fresh.usage = this.sumUsage(fresh);
     this.store.save(fresh);

@@ -21,8 +21,8 @@ export function listCommand(opts: { json?: boolean } = {}): void {
   if (profiles.length === 0) {
     console.log('');
     console.log(dim('  No profiles yet.'));
-    console.log(`  ${cyan('am init')}  register accounts you are already signed into`);
-    console.log(`  ${cyan('am add')}   create a new isolated profile`);
+    console.log(`  ${cyan('am init')}          register accounts you are already signed into`);
+    console.log(`  ${cyan('am profile add')}   create a new isolated profile`);
     console.log('');
     return;
   }

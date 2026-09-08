@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 · 2026-09-08
+
+- Commands are a noun and a verb, and each verb keeps one meaning everywhere: `am profile ls|add|rm|use|run`, `am gm start|open|stop|ls|show|rm`, `am board`, `am task …`, `am agent …`, `am shell hook|env`. `start` and `stop` are for work in the background (a GM, a task), `open` for a conversation, `run` for a tool in the foreground, `use` for a switch that stays. Shortcuts drop the noun: `am` (status), `am run`, `am gm` (open), `am board`.
+- Renamed: `am add|ls|rm|use` → `am profile …` · `am start <profile> gm [name]` → `am gm start <profile> [name]` · `am stop` → `am gm stop` · `am tasks` → `am board` · `am shell-init` → `am shell hook` · `am env` → `am shell env` · `--swarm` → `--gm` · `am task dispatch` → `am task start` · `am task reassign` → `am task assign` · the GM's `task_dispatch` and `task_reassign` tools → `task_start` and `task_assign`. `am which` is folded into `am status`. Every old name still works and prints the new one; old GM sessions and task managers keep working across the update.
+- New: `am gm show [name]` (models, team, workspace and what needs you, running or not) · `am gm rm <name>` (forget a stopped GM's records) · `am gm start --no-open` · `am status` is the home screen and lists every GM with what needs you · `am init` offers to install the shell hook · `am doctor` notices a hook from an older version.
+- Settings are grouped by the thing they describe and read as sentences: `model.gm|tm|agents|codex-agents`, `team.size|notify`, `gm.propose|hud`, `tm.answers`, `agent.permissions|allow|compact-at|stall-after|context-window|compact-env`, `limits.budget-usd|quota-warn|quota-hold`. `am config` lists every setting with its meaning; the old `swarm.<key>` names are accepted and mapped.
+- The shell hook handles `am profile use` as well as `am use`; reinstall it with `am init` or `am shell hook`. `am agent ls` shows only the agents; the GM's and task manager's models moved to `am gm show`.
+- Docs, output and the GM's instructions use the same words: the board, start, assign. "Dispatch" and "swarm" no longer appear anywhere the owner reads.
+
 ## 0.6.0 · 2026-09-08
 
 - Models are yours to set for each of the three groups: the General Manager (`swarm.gmModel`), the task manager (`swarm.tmModel`, formerly `triageModel`, which still works) and the task agents (`swarm.agentModel`; `codexAgentModel` for agents on Codex profiles). By default every group runs on the profile's own model; the Opus defaults from 0.5.3 are gone. `am config swarm.<key> default` clears a setting.

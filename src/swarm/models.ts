@@ -8,8 +8,8 @@ import type { Agent, SwarmConfig, SwarmMeta } from './model.js';
  * task agents that live on a Codex profile (Codex has its own model names).
  *
  * Resolution order, per group:
- *   1. set for this GM         (am start … --gm-model / --tm-model / --agent-model, or Friday's models_set)
- *   2. set for every GM        (am config swarm.gmModel | tmModel | agentModel | codexAgentModel)
+ *   1. set for this GM         (am gm start … --gm-model / --tm-model / --agent-model, or the GM's models_set)
+ *   2. set for every GM        (am config model.gm | model.tm | model.agents | model.codex-agents)
  *   3. the profile's own model (Claude Code settings.json "model", Codex config.toml "model")
  *   4. the tool's default
  * Only 1 and 2 are passed on the command line; for 3 and 4 the tool applies its own default.
@@ -91,7 +91,7 @@ export function modelsView(meta: SwarmMeta, cfg: SwarmConfig, gmProfile: Profile
   };
 }
 
-/** One line per group, for `am start`, `am agent ls` and the GM's team list. */
+/** One line per group, for `am gm start`, `am gm show` and the GM's team list. */
 export function modelsLines(v: ModelsView, gmName: string): string[] {
   const out = [
     `${gmName} runs on ${describeModel(v.gm)}`,

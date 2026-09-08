@@ -1,4 +1,4 @@
-# PRD — `am start <profile> gm`
+# PRD — `am gm start <profile> gm`
 
 **Draft v0.3 · 2026-09-06 · Roy Liu with Claude.** Extends `am` from a profile and quota manager into a control plane for one swarm of coding agents per project. Detail that is not needed to understand the product lives in `PRD-swarm-appendix.md`. Interactive mockup: `docs/mockup-swarm.html`.
 
@@ -6,7 +6,7 @@
 
 ```sh
 cd ~/Projects/agent-manager
-am start personal gm friday
+am gm start personal friday
 ```
 
 Friday is a General Manager running on your `personal` profile in this folder. It brings up its own **task manager** (the board) and **four task agents** (`friday-1` … `friday-4`). You describe what you want; Friday discusses, breaks it into tasks with short ids (`#12`), assigns them, and reviews the results. The board shows every task and every agent, what it costs, and what needs you.
@@ -15,8 +15,8 @@ Friday is a General Manager running on your `personal` profile in this folder. I
 
 | You see | Reach it |
 |---|---|
-| **Friday** — interprets, discusses, decomposes, assigns, reviews. Owns the workspace and the team. Speaks plain English. | `am start <profile> gm [name]` · `am gm` to come back |
-| **The board** — every task with status, owner, ETA, cost; a team strip with each agent's state and context use; how many things need you. | `am tasks` |
+| **Friday** — interprets, discusses, decomposes, assigns, reviews. Owns the workspace and the team. Speaks plain English. | `am gm start <profile> [name]` · `am gm` to come back |
+| **The board** — every task with status, owner, ETA, cost; a team strip with each agent's state and context use; how many things need you. | `am board` |
 
 | Runs underneath | Does |
 |---|---|
@@ -26,16 +26,16 @@ Friday is a General Manager running on your `personal` profile in this folder. I
 ## Starting
 
 1. `cd` into the project.
-2. `am start personal gm friday` — any `am` profile; the name is optional.
+2. `am gm start personal friday` — any `am` profile; the name is optional.
 3. Friday creates its task manager and four agents, captures the **workspace** (this folder, its branch, your shell environment with API keys stripped), then hands the terminal to Claude Code (or Codex) running as Friday, with its tools, instructions and a status line attached (`friday · personal Max 20x · ctx 44% · 3 need you`). Friday says hello in one paragraph. From here on it is a normal Claude Code session.
-4. Talk to Friday here; this terminal is now Claude Code (or Codex). `am start` does nothing else.
-5. In another terminal, `am tasks` shows the board. Wide terminal: kanban columns. Narrow terminal: a list. It re-lays out when you resize. You never need the board to work with Friday: it tells you in chat when something needs you, and the status line shows the count.
+4. Talk to Friday here; this terminal is now Claude Code (or Codex). `am gm start` does nothing else.
+5. In another terminal, `am board` shows the board. Wide terminal: kanban columns. Narrow terminal: a list. It re-lays out when you resize. You never need the board to work with Friday: it tells you in chat when something needs you, and the status line shows the count.
 
-**One folder, one GM.** `am start` in a folder that already has a GM resumes it; a different name is refused until you `am stop`. A git worktree is its own folder, so each worktree can have its own GM with its own board and team; the per-task worktrees Friday makes for its agents are not places to start one.
+**One folder, one GM.** `am gm start` in a folder that already has a GM resumes it; a different name is refused until you `am gm stop`. A git worktree is its own folder, so each worktree can have its own GM with its own board and team; the per-task worktrees Friday makes for its agents are not places to start one.
 
 Start from the shell, not from inside Claude Code: the profile, credentials, tools and status line are chosen when Claude Code launches and cannot be swapped into a running session. Once started, Friday *is* the Claude Code session you are in.
 
-`am gm` reattaches. `am stop` stops the team; board state is kept. Change the workspace by telling Friday ("we're on feat/board now"); it updates the brief and every agent adapts at its next task.
+`am gm` reattaches. `am gm stop` stops the team; board state is kept. Change the workspace by telling Friday ("we're on feat/board now"); it updates the brief and every agent adapts at its next task.
 
 ## The three rules
 
@@ -82,7 +82,7 @@ Layout follows the terminal: columns like a kanban at 110 characters or wider, a
 
 | | Ships | Demo |
 |---|---|---|
-| **M1 Start** | `am start`, four agents, board in both layouts, read-only, report | Friday says hello; one ask becomes a task an agent finishes |
+| **M1 Start** | `am gm start`, four agents, board in both layouts, read-only, report | Friday says hello; one ask becomes a task an agent finishes |
 | **M2 Conversation** | structured ask with pause and resume, escalation, board keys, notes in briefs | an agent's question reaches you on the board, you answer, it finishes |
 | **M3 Team** | team strip, checkpoint and compact at 90%, memory notes, workspace propagation, watchdog, cost per task | `friday-2` hits 90%, checkpoints, compacts, finishes; you change branch in chat and the next task uses it |
 | **M4 Polish** | quota guard and agent move, triage, notifications, `--json` | daily-driver quality |

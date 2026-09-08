@@ -36,7 +36,7 @@ function warnIfSameSubscription(name: string, provider: ProviderId, account?: st
   console.log(
     `    ${dim('One subscription, two profiles - the quota is shared and usage double-counts.')}`,
   );
-  console.log(`    ${dim('Sign this one into another account, or drop it:')} ${cyan(`am rm ${name}`)}`);
+  console.log(`    ${dim('Sign this one into another account, or drop it:')} ${cyan(`am profile rm ${name}`)}`);
   console.log('');
 }
 

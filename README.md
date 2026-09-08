@@ -28,10 +28,10 @@ am --version
 ## Quick start
 
 ```sh
-am init      # register the accounts you're already signed into (nothing is moved)
-am add       # create a second, isolated profile and sign in
-am status    # plan, quota, consumption for everything
-am run work  # launch a tool under a profile
+am init              # register the accounts you're already signed into, install the shell hook
+am profile add       # create a second, isolated profile and sign in
+am status            # home screen: plan, quota and consumption per profile; every GM
+am run work          # open a tool on a profile (short for am profile run)
 ```
 
 Profile names are unique across every tool, so a name always identifies exactly
@@ -39,10 +39,11 @@ one profile: `am init` names the accounts it adopts after their tool (`claude`,
 `codex`, `desktop`), and `am run <name>` never needs a `--provider` to know what
 you meant.
 
-Add the shell hook once so `am use` can change your current shell:
+`am init` offers to install the shell hook, which lets `am profile use` switch the profile
+of your current shell. By hand:
 
 ```sh
-am shell-init >> ~/.zshrc && exec zsh
+am shell hook >> ~/.zshrc && exec zsh
 ```
 
 ## How isolation works
@@ -93,7 +94,7 @@ The dollar figure is the **list price of the same work**, not what you were
 charged — on a subscription it's the value your plan absorbed.
 
 
-## A team of agents per project: `am start`
+## A team of agents per project: `am gm start`
 
 `am` can also run a team of agents on your profiles. Step by step:
 
@@ -101,7 +102,7 @@ charged — on a subscription it's the value your plan absorbed.
 
 ```sh
 cd ~/Projects/genie
-am start personal gm friday     # personal = any Claude Code or Codex profile; the name is yours
+am gm start personal friday     # personal = any Claude Code or Codex profile; the name is yours
 ```
 
 That sets up a **task manager** and **four task agents** (`friday-1` … `friday-4`) on the
@@ -116,7 +117,7 @@ first, then proposes the tasks it would create and waits for your "go". Tasks ge
 **3. Watch the board in another terminal.**
 
 ```sh
-am tasks                        # kanban when wide, a list when narrow; keys shown on screen
+am board                        # kanban when wide, a list when narrow; keys shown on screen
 ```
 
 **4. Answer and approve as things come up.** Agents' questions go to the task manager, which
@@ -124,19 +125,20 @@ answers most of them itself. What reaches you shows as "needs you" on the board:
 reply, `a` to accept finished work, `x` to send it back or stop it. Or just tell Friday.
 
 **5. Come and go.** Close the terminal any time; the team keeps working. `am gm` reopens
-Friday's conversation, `am stop` ends the team, and the board is kept either way.
+Friday's conversation, `am gm stop` ends the team, and the board is kept either way.
 
 You see two things: Friday and the board. Everything else is Friday's business.
 
 | Command | Does |
 |---|---|
-| `am start <profile> gm [name] [--agents N] [--gm-model\|--tm-model\|--agent-model <m>]` | create or resume a General Manager in this folder; model flags are remembered for this GM |
-| `am gm` · `am gm ls` | come back to Friday's conversation · list every GM |
-| `am tasks [name] [--group status\|agent\|eta] [--json]` | the board, live |
-| `am task show\|add\|note\|answer\|approve\|reject\|cancel\|retry\|reassign\|dispatch #id …` | act on a task from the shell |
-| `am agent ls\|add\|rm\|move` | the team (add an agent on another profile: `am agent add --profile work`) |
-| `am stop [name]` | stop the team and task manager; the board is kept |
-| `am config swarm.<key> [value]` | for every GM: `gmModel` `tmModel` `agentModel` `codexAgentModel` `agents` `dispatch` `triage` `notify` `stallAfterMin` `compactAt` `budgetUsd` (`default` clears) |
+| `am gm start <profile> [name] [--agents N] [--gm-model\|--tm-model\|--agent-model <m>] [--no-open]` | start a GM here and open the conversation; model flags are remembered for this GM |
+| `am gm [name]` · `am gm open [name]` | open Friday's conversation where you left it |
+| `am gm stop [name]` | stop the team and task manager; the board is kept |
+| `am gm ls` · `am gm show [name]` · `am gm rm <name>` | every GM · one GM in full (models, team, what needs you) · forget a stopped GM |
+| `am board [name] [-g status\|agent\|eta] [--json]` | the board, live |
+| `am task ls\|show\|add\|note\|eta\|answer\|approve\|reject\|stop\|start\|assign\|cancel\|retry #id …` | act on a task from the shell (`--gm <name>` from elsewhere) |
+| `am agent ls\|add\|rm\|move` | the task agents (add one on another profile: `am agent add --profile work`) |
+| `am config [group.key] [value]` | for every GM: `model.gm` `model.tm` `model.agents` `team.size` `gm.propose` `tm.answers` `agent.compact-at` `limits.budget-usd` … (`default` clears) |
 
 **Board keys.** `↑↓←→` move · `⏎` open a task · `g` group by status, agent or ETA · `s` sort ·
 `d` hide done · `/` filter · `r` reply to a question · `a` approve · `x` send back with
@@ -159,7 +161,7 @@ works too: wheel to scroll, click to select, double-click to open (hold Shift to
    writes a checkpoint note on its task, refreshes its one-paragraph project memory, and is
    continued in a fresh session from the note. The board is the memory.
 
-One folder, one GM. Running `am start` again in a folder that has one resumes it. A git
+One folder, one GM. Running `am gm start` again in a folder that has one resumes it. A git
 worktree is its own folder and can have its own GM.
 
 Where things live: `~/.agent-manager/swarms/<name>/` holds the tasks, notes, events, the
@@ -167,34 +169,40 @@ team, the workspace brief and the agents' run logs; `swarms.json` maps names to 
 
 Models: three groups, each yours to set: the GM, the task manager, and the task agents.
 By default all three run on the profile's own model (the `model` in that profile's Claude
-Code settings, or Codex config). Change one for every GM with `am config swarm.gmModel`,
-`swarm.tmModel` or `swarm.agentModel`; for one GM with `am start … --gm-model`, `--tm-model`
+Code settings, or Codex config). Change one for every GM with `am config model.gm`,
+`model.tm` or `model.agents`; for one GM with `am gm start … --gm-model`, `--tm-model`
 or `--agent-model` (remembered for that GM); or just ask Friday, who has a tool for it and
 changes models only when you ask. `default` puts a group back on the profile's model.
 `am agent ls` and Friday's team list show what everyone runs on. A new GM model applies when
 you next open the conversation; the task manager's at its next answer; the agents' at their
-next run. Agents on Codex profiles have their own key, `codexAgentModel`, since Codex has its
+next run. Agents on Codex profiles have their own key, `model.codex-agents`, since Codex has its
 own model names. Compaction: `am` asks the tool to compact
-at `swarm.compactAt` where it exposes a setting (`swarm.compactEnv`), and independently
+at `agent.compact-at` where it exposes a setting (`agent.compact-env`), and independently
 watches each agent's context and drives the checkpoint-and-fresh-session step itself.
 
 ## Commands
 
 | Command | Does |
 |---|---|
-| `am init` | detect installed tools, register existing logins |
-| `am add [name]` | guided setup for a new isolated profile |
-| `am status [--watch] [--live] [--json]` | plan, quota, consumption |
-| `am ls` | list profiles |
-| `am use <name>` | make a profile active (shell-wide with the hook) |
-| `am run [name] [-- args]` | launch a tool under a profile |
-| `am which` | what's active right now |
-| `am doctor` | installs, logins, isolation, billing-override checks |
-| `am rm <name> [--purge]` | unregister (and optionally delete) a profile |
-| `am shell-init [zsh\|bash\|fish]` | print the shell hook |
+| `am` · `am status [--watch] [--live] [--json]` | home screen: every profile's plan, quota and consumption; every GM |
+| `am init` | first-run setup: register existing logins, install the shell hook |
+| `am doctor` | installs, logins, isolation, the shell hook, billing-override checks |
+| `am profile ls` | list profiles; the active one is marked |
+| `am profile add [name]` | guided setup for a new isolated profile |
+| `am profile rm <name> [--purge]` | unregister (and optionally delete) a profile |
+| `am profile use <name>` | switch this shell to a profile (with the hook) |
+| `am run <name> [-- args]` · `am profile run` | open a tool on a profile, in the foreground |
+| `am shell hook [zsh\|bash\|fish]` · `am shell env <name>` | print the shell hook · print a profile's exports |
 
 Options come **before** the profile name so everything after it passes through
 untouched: `am run --provider codex work -- --resume`.
+
+**How commands are named.** A noun, then a verb. The nouns are the things in the story:
+`profile`, `gm`, `board`, `task`, `agent`, and `shell` for plumbing. Each verb means one thing
+everywhere: `start` and `stop` for work in the background (a GM, a task), `open` for a
+conversation, `run` for a tool in the foreground, `use` for a switch that stays, and `ls`,
+`add`, `rm`, `show`, `assign`, `move` on the collections. Four shortcuts drop the noun: `am`
+(status), `am run`, `am gm` (open) and `am board`. Names from before 0.7.0 (`am tasks`, `am start`, `am add`, …) still work and print the new name.
 
 ## Where things live
 

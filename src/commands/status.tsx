@@ -5,8 +5,10 @@ import { findDuplicateAccounts, redundantMember } from '../core/duplicates.js';
 import { getProvider } from '../providers/index.js';
 import type { ProviderId } from '../core/config.js';
 import { toRows, type Row } from '../ui/rows.js';
+import { tildify } from '../core/paths.js';
+import { gmOverview, type GmRow } from '../swarm/overview.js';
 import {
-  bar, bold, cyan, dim, listPhrase, padEnd, pct, red, relTime, tokens, truncateVisible, untilTime,
+  bar, bold, cyan, dim, green, listPhrase, padEnd, pct, red, relTime, tokens, truncateVisible, untilTime,
   usd, width, yellow,
 } from '../ui/format.js';
 
@@ -32,14 +34,31 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
 }
 
-export function renderLines(snapshot: Snapshot, term = process.stdout.columns || 100): string[] {
+/** The GM section of the home screen: one line per General Manager. */
+function gmLines(gms: GmRow[], nameW: number): string[] {
+  if (!gms.length) return [];
+  const board = (g: GmRow) =>
+    g.running
+      ? `${g.needYou ? yellow(`${g.needYou} need you`) : dim('nothing needs you')} · ${g.working} working · ${g.open} open`
+      : dim(`${g.open} open`);
+  const boardW = Math.max(7, ...gms.map((g) => width(board(g)))) + 2;
+  const out = [''];
+  out.push('  ' + padEnd(dim('GM'), nameW) + padEnd(dim('PROFILE'), 12) + padEnd(dim('STATE'), 10) + padEnd(dim('BOARD'), boardW) + dim('FOLDER'));
+  for (const g of gms) {
+    out.push(`  ${padEnd(bold(g.name), nameW)}${padEnd(g.profile, 12)}${padEnd(g.running ? green('running') : dim('stopped'), 10)}${padEnd(board(g), boardW)}${dim(tildify(g.dir))}`);
+  }
+  return out;
+}
+
+export function renderLines(snapshot: Snapshot, term = process.stdout.columns || 100, gms: GmRow[] = []): string[] {
   const rows = toRows(snapshot);
   if (rows.length === 0) {
     return [
       dim('No profiles yet.'),
       '',
-      `  Run ${cyan('am add')} to set one up, or ${cyan('am init')} to register`,
+      `  Run ${cyan('am profile add')} to set one up, or ${cyan('am init')} to register`,
       '  the accounts you are already signed into.',
+      ...gmLines(gms, 14).map((line) => truncateVisible(line, term)),
     ];
   }
 
@@ -131,9 +150,11 @@ export function renderLines(snapshot: Snapshot, term = process.stdout.columns ||
     );
     out.push(
       dim(`  One quota pool, counted ${names.length}× above. Drop the spare: `) +
-        cyan(`am rm ${spare.name}`),
+        cyan(`am profile rm ${spare.name}`),
     );
   }
+
+  out.push(...gmLines(gms, Math.max(14, w.name + 2)));
 
   const nextReset = rows
     .flatMap((r) => r.windows.map((win) => ({ name: r.name, win })))
@@ -157,6 +178,7 @@ const Dashboard: React.FC<{ interval: number; provider?: ProviderId; live?: bool
   live,
 }) => {
   const [snapshot, setSnapshot] = useState<Snapshot | undefined>();
+  const [gms, setGms] = useState<GmRow[]>([]);
   const [tick, setTick] = useState(0);
   const [columns, setColumns] = useState(process.stdout.columns || 100);
   const { exit } = useApp();
@@ -180,6 +202,9 @@ const Dashboard: React.FC<{ interval: number; provider?: ProviderId; live?: bool
       takeSnapshot({ provider, live }).then((s) => {
         if (!cancelled) setSnapshot(s);
       });
+      gmOverview().then((g) => {
+        if (!cancelled) setGms(g);
+      });
     };
     refresh();
     const timer = setInterval(refresh, interval);
@@ -197,7 +222,7 @@ const Dashboard: React.FC<{ interval: number; provider?: ProviderId; live?: bool
         {bold('agent-manager')} {dim(`· ${new Date(snapshot.takenAt).toLocaleTimeString()}`)}
       </Text>
       <Text> </Text>
-      {renderLines(snapshot, columns).map((line, i) => (
+      {renderLines(snapshot, columns, gms).map((line, i) => (
         <Text key={i} wrap="truncate">
           {line}
         </Text>
@@ -221,12 +246,12 @@ export async function statusCommand(opts: Options): Promise<void> {
     return;
   }
 
-  const snapshot = await takeSnapshot({ provider: opts.provider, live: opts.live });
+  const [snapshot, gms] = await Promise.all([takeSnapshot({ provider: opts.provider, live: opts.live }), gmOverview()]);
   if (opts.json) {
-    console.log(JSON.stringify({ takenAt: snapshot.takenAt, profiles: toRows(snapshot) }, null, 2));
+    console.log(JSON.stringify({ takenAt: snapshot.takenAt, profiles: toRows(snapshot), gms }, null, 2));
     return;
   }
   console.log('');
-  for (const line of renderLines(snapshot)) console.log(line);
+  for (const line of renderLines(snapshot, process.stdout.columns || 100, gms)) console.log(line);
   console.log('');
 }

@@ -146,8 +146,8 @@ footer{padding:36px 0 0;color:var(--ink-3);font-size:13px}
   <div class="see">
     <div class="col you">
       <div class="lab">What you see</div>
-      <div class="role"><div class="name">Friday, the General Manager</div><p>A Claude Code session on your profile. Interprets, discusses, breaks work into tasks, assigns, reviews. Owns the workspace and the team.</p><code>am start personal gm friday</code></div>
-      <div class="role"><div class="name">The board</div><p>Every task with status, owner, ETA and cost. A team strip with each agent's state and context use. How many things need you.</p><code>am tasks</code></div>
+      <div class="role"><div class="name">Friday, the General Manager</div><p>A Claude Code session on your profile. Interprets, discusses, breaks work into tasks, assigns, reviews. Owns the workspace and the team.</p><code>am gm start personal friday</code></div>
+      <div class="role"><div class="name">The board</div><p>Every task with status, owner, ETA and cost. A team strip with each agent's state and context use. How many things need you.</p><code>am board</code></div>
     </div>
     <div class="col under">
       <div class="lab">What runs underneath</div>
@@ -169,14 +169,14 @@ footer{padding:36px 0 0;color:var(--ink-3);font-size:13px}
 
 <section id="start">
   <div class="sechead">
-    <span class="eyebrow">Mockup · am start</span>
+    <span class="eyebrow">Mockup · am gm start</span>
     <h2>Starting Friday in a project</h2>
-    <p>One command, from the shell rather than from inside Claude Code: the profile, credentials, tools and status line are chosen when Claude Code launches. <code>am</code> sets up the team, then hands the terminal to Claude Code (or Codex, if that is the profile's tool) running as Friday. It does nothing else. The board is <code>am tasks</code> in another terminal.</p>
+    <p>One command, from the shell rather than from inside Claude Code: the profile, credentials, tools and status line are chosen when Claude Code launches. <code>am</code> sets up the team, then hands the terminal to Claude Code (or Codex, if that is the profile's tool) running as Friday. It does nothing else. The board is <code>am board</code> in another terminal.</p>
   </div>
   <figure>
-    <div class="term"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>am start personal gm friday</span><span class="spacer"></span><span class="cc">✻ claude</span><span>· ~/Projects/agent-manager</span></div>
+    <div class="term"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>am gm start personal friday</span><span class="spacer"></span><span class="cc">✻ claude</span><span>· ~/Projects/agent-manager</span></div>
 <pre><span class="c-dim">❯</span> <span class="c-bold">cd ~/Projects/agent-manager</span>
-<span class="c-dim">❯</span> <span class="c-bold">am start personal gm friday</span>
+<span class="c-dim">❯</span> <span class="c-bold">am gm start personal friday</span>
   <span class="c-cyan">●</span> profile personal <span class="c-dim">· Max 20x · you@gmail.com · 5h window 34% used</span>
   <span class="c-green">✓</span> task manager and four task agents ready: friday-1 friday-2 friday-3 friday-4 <span class="c-dim">(idle, personal)</span>
   <span class="c-green">✓</span> workspace: ~/Projects/agent-manager · main · node 22.6 · your shell environment <span class="c-dim">(API keys stripped)</span>
@@ -240,13 +240,13 @@ footer{padding:36px 0 0;color:var(--ink-3);font-size:13px}
 │</span> <span class="c-dim">></span> <span class="c-dim">▏</span>                                                                                             <span class="c-frame">│
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
   <span class="c-dim">? for shortcuts</span>                                      <span class="c-cyan">friday</span> <span class="c-dim">· personal Max 20x · ctx 44% ·</span> <span class="c-yellow">3 need you</span></pre></div>
-    <figcaption>Everything after the setup lines is Claude Code. Friday's identity comes from the instructions <code>am</code> attaches; tool calls are collapsed the way Claude Code shows them; the status line is set by <code>am</code>. <b>One folder, one GM:</b> running <code>am start</code> again here resumes Friday; a git worktree is its own folder and can have its own GM.</figcaption>
+    <figcaption>Everything after the setup lines is Claude Code. Friday's identity comes from the instructions <code>am</code> attaches; tool calls are collapsed the way Claude Code shows them; the status line is set by <code>am</code>. <b>One folder, one GM:</b> running <code>am gm start</code> again here resumes Friday; a git worktree is its own folder and can have its own GM.</figcaption>
   </figure>
 
   <figure>
-    <div class="term"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>two terminals side by side</span><span class="spacer"></span><span class="cc">✻ claude</span><span>· left</span><span>am tasks · right</span></div>
-<pre><span class="c-frame">┌</span><span class="c-dim"> terminal 1 · am start personal gm friday </span><span class="c-frame">──────────────────</span><span class="c-frame">┬</span><span class="c-dim"> terminal 2 · am tasks </span><span class="c-frame">───────────────────────────────────────────</span><span class="c-frame">┐</span>
-<span class="c-frame">│</span><span class="c-dim">❯ </span><span class="c-bold">am start personal gm friday</span>                               <span class="c-frame">│</span><span class="c-bold"> friday</span><span class="c-dim"> · agent-manager · main</span>            personal <span class="c-dim">5h </span><span class="c-cyan">███░░░░░</span> 34%<span class="c-frame">│</span>
+    <div class="term"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>two terminals side by side</span><span class="spacer"></span><span class="cc">✻ claude</span><span>· left</span><span>am board · right</span></div>
+<pre><span class="c-frame">┌</span><span class="c-dim"> terminal 1 · am gm start personal friday </span><span class="c-frame">──────────────────</span><span class="c-frame">┬</span><span class="c-dim"> terminal 2 · am board </span><span class="c-frame">───────────────────────────────────────────</span><span class="c-frame">┐</span>
+<span class="c-frame">│</span><span class="c-dim">❯ </span><span class="c-bold">am gm start personal friday</span>                               <span class="c-frame">│</span><span class="c-bold"> friday</span><span class="c-dim"> · agent-manager · main</span>            personal <span class="c-dim">5h </span><span class="c-cyan">███░░░░░</span> 34%<span class="c-frame">│</span>
 <span class="c-frame">│</span><span class="c-cyan">  ● </span>profile personal<span class="c-dim"> · Max 20x · 5h window 34% used</span>         <span class="c-frame">│</span><span class="c-dim"> team </span>friday-1 <span class="c-cyan">▶ </span>#12 <span class="c-dim">62%</span>    friday-2 <span class="c-cyan">▶ </span>#21 <span class="c-yellow">91% ↻</span>                  <span class="c-frame">│</span>
 <span class="c-frame">│</span><span class="c-green">  ✓ </span>task manager and four agents ready: friday-1 … friday-4 <span class="c-frame">│</span>      friday-3 <span class="c-yellow">⏸ </span>#11 <span class="c-yellow">you</span>    friday-4 <span class="c-cyan">▶ </span>#10 <span class="c-dim">23%</span>                    <span class="c-frame">│</span>
 <span class="c-frame">│</span><span class="c-green">  ✓ </span>workspace: ~/Projects/agent-manager · main · node 22.6  <span class="c-frame">│</span><span class="c-dim"> group </span><span class="c-cyan c-bold">[status]</span><span class="c-dim"> agent  eta</span>          <span class="c-yellow">1 need you</span><span class="c-dim"> · 15 tasks · $24.38</span><span class="c-frame">│</span>
@@ -283,19 +283,19 @@ footer{padding:36px 0 0;color:var(--ink-3);font-size:13px}
 <span class="c-frame">│</span><span class="c-frame">╰────────────────────────────────────────────────────────╯</span>  <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
 <span class="c-frame">│</span><span class="c-dim">  ? for shortcuts</span>             <span class="c-cyan">friday</span><span class="c-dim"> · personal · </span><span class="c-yellow">1 need you</span><span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
 <span class="c-frame">└────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────┘</span></pre></div>
-    <figcaption><b>Two commands, two terminals.</b> <code>am start</code> on the left launches Claude Code as Friday and nothing else. <code>am tasks</code> on the right is the board. The board chooses its layout from the terminal width: kanban columns at 110 characters or wider, a sectioned list below that, as here, with <kbd>←</kbd> <kbd>→</kbd> jumping between sections; it re-lays out when you resize. Chat and board are the same data: approving #15 and #10 in chat moved them on the right, and the status line dropped to one thing needing you.</figcaption>
+    <figcaption><b>Two commands, two terminals.</b> <code>am gm start</code> on the left launches Claude Code as Friday and nothing else. <code>am board</code> on the right is the board. The board chooses its layout from the terminal width: kanban columns at 110 characters or wider, a sectioned list below that, as here, with <kbd>←</kbd> <kbd>→</kbd> jumping between sections; it re-lays out when you resize. Chat and board are the same data: approving #15 and #10 in chat moved them on the right, and the status line dropped to one thing needing you.</figcaption>
   </figure>
 </section>
 
 <section id="mockup">
   <div class="sechead">
-    <span class="eyebrow">Interactive mockup · am tasks</span>
+    <span class="eyebrow">Interactive mockup · am board</span>
     <h2>The board</h2>
     <p>Click into the terminal. Arrows move, <kbd>⏎</kbd> opens a task, <kbd>g</kbd> regroups by status, agent or ETA. <code>#11</code> is waiting on you: press <kbd>r</kbd> and answer. <code>#10</code> is a plan waiting for approval: <kbd>a</kbd> starts it on the idle agent. The mouse works too: wheel or trackpad scrolls the column under the pointer, a click selects a card, a double-click opens it.</p>
   </div>
   <div class="termwrap">
-    <div class="term live" id="tui" tabindex="0" role="application" aria-label="Interactive mockup of the am tasks board. Use arrow keys to move, Enter to open a task, Escape to go back.">
-      <div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>am tasks · 150×34 · ~/Projects/agent-manager</span><span class="spacer"></span><span class="focus">● keyboard live</span></div>
+    <div class="term live" id="tui" tabindex="0" role="application" aria-label="Interactive mockup of the am board board. Use arrow keys to move, Enter to open a task, Escape to go back.">
+      <div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>am board · 150×34 · ~/Projects/agent-manager</span><span class="spacer"></span><span class="focus">● keyboard live</span></div>
       <pre id="screen" aria-live="polite"></pre>
     </div>
     <div class="keys" id="keypad">
@@ -461,7 +461,7 @@ footer{padding:36px 0 0;color:var(--ink-3);font-size:13px}
     <h2>Four milestones, each with a demo</h2>
   </div>
   <div class="milestones">
-    <div><div class="m">M1</div><div class="t">Start</div><code>am start</code>, four agents, board read-only, report<div class="exit">Friday says hello; one ask becomes a task an agent finishes.</div></div>
+    <div><div class="m">M1</div><div class="t">Start</div><code>am gm start</code>, four agents, board read-only, report<div class="exit">Friday says hello; one ask becomes a task an agent finishes.</div></div>
     <div><div class="m">M2</div><div class="t">Conversation</div>structured ask with pause and resume, escalation, board keys, notes in briefs<div class="exit">An agent's question reaches you on the board; you answer; it finishes.</div></div>
     <div><div class="m">M3</div><div class="t">Team</div>team strip, checkpoint and compact at 90%, memory notes, workspace propagation, watchdog, cost per task<div class="exit">friday-2 hits 90%, checkpoints, compacts, finishes. You change branch in chat; the next task uses it.</div></div>
     <div><div class="m">M4</div><div class="t">Polish</div>quota guard and agent move, triage, notifications, <code>--json</code><div class="exit">Daily-driver quality.</div></div>
@@ -573,7 +573,7 @@ function seed(){
      desc:'Read the profile’s transcripts for each run’s session and add up tokens and list-price cost per run and per task. Show it on the preview, in detail, and as column totals.',
      notes:[], qs:[], runs:[], result:null, events:[{at:D(9,6,12,10),text:'created by '+GM+' · queued'}]},
     {id:18, title:'README: the swarm section', status:'open', pri:3, eta:D(9,11,18), agent:null, usd:0, tok:'—', run:0, created:D(9,6,12,12), updated:D(9,6,12,12), branch:'—',
-     desc:'Document am start, am tasks and the question ladder in the README, in the same voice as the existing sections.',
+     desc:'Document am gm start, am board and the question ladder in the README, in the same voice as the existing sections.',
      notes:[], qs:[], runs:[], result:null, events:[{at:D(9,6,12,12),text:'created by '+GM+' · queued'}]},
     {id:19, title:'Notify me when something needs me', status:'open', pri:3, eta:null, agent:null, usd:0, tok:'—', run:0, created:D(9,6,12,14), updated:D(9,6,12,14), branch:'—',
      desc:'A terminal bell and a desktop notification when a task starts waiting on you: a question, a plan to approve, or a review. One setting turns it off.',

@@ -1,4 +1,4 @@
-# Appendix — `am start … gm` detail
+# Appendix — `am gm start … gm` detail
 
 Supporting material for `PRD-swarm.md`. Nothing here is needed to understand the product; it is here for when we build it.
 
@@ -6,7 +6,7 @@ Supporting material for `PRD-swarm.md`. Nothing here is needed to understand the
 
 ## A. User stories
 
-1. *As Roy,* I `cd` into a project and run `am start personal gm friday`; within seconds Friday says hello, tells me the team is ready and the board is `am tasks`, and asks what I want done.
+1. *As Roy,* I `cd` into a project and run `am gm start personal friday`; within seconds Friday says hello, tells me the team is ready and the board is `am board`, and asks what I want done.
 2. *As Roy,* I describe a feature; Friday asks two clarifying questions in plain words, proposes three tasks with owners and ETAs, and dispatches on my "go".
 3. *As Roy,* I open the board and see the four agents in one strip: two working, one waiting on me, one idle with its next task named. The header says three things need me.
 4. *As Roy,* I press `→` to the blocked column, read `friday-3`'s question with its context in the preview, press `r`, answer in one line, and watch the card move back to in progress.
@@ -15,29 +15,29 @@ Supporting material for `PRD-swarm.md`. Nothing here is needed to understand the
 7. *As Roy,* I switch branch and tell Friday "we're on feat/board now"; the workspace brief updates and the next task any agent starts uses the new branch.
 8. *As Friday,* when an agent reports done I get a plain summary with verification in my inbox, look at the diff, and approve or send it back with feedback.
 9. *As friday-3,* I have the task, its acceptance notes and the workspace before I start; when I hit an ambiguity I ask with context and get resumed with the answer.
-10. *As Roy,* I run `am start work gm monday` in a second project and the two teams never touch each other's profile, board or workspace.
+10. *As Roy,* I run `am gm start work gm monday` in a second project and the two teams never touch each other's profile, board or workspace.
 
 ## B. Functional requirements
 
-### 10.1 `am start <profile> gm [name]` and the GM session
+### 10.1 `am gm start <profile> [name]` and the GM session
 
 - Flags: `--agents N` (default 4), `--board` (tmux split with the board), `--dir <path>` (workspace other than cwd), `--keep-api-keys`.
 - The GM session runs under the profile with the swarm tools attached and the GM prompt, which encodes: talk first, formalise second; propose before dispatching unless policy is `auto`; write briefs for the agent, not for Roy; record decisions as notes; refer to tasks by id; ask Roy only when notes and the ask do not settle a question; plain English always; checkpoint and compact at 90%.
-- Dispatch policy: `propose` (default) or `auto` (`am config swarm.dispatch`). In `auto`, single-task asks dispatch immediately; decompositions of two or more tasks are still proposed.
+- Dispatch policy: `propose` (default) or `auto` (`am config gm.propose`). In `auto`, single-task asks dispatch immediately; decompositions of two or more tasks are still proposed.
 - Inbox delivery: task-manager events are injected at the GM's next turn, and an end-of-turn hook keeps the GM working while unread items remain. The board shows `friday inbox N`.
 - The GM's first message states: workspace, profile and plan, team size and names, how to open the board. Nothing about daemons, sockets or tools.
 
 ### 10.2 Task manager service
 
-- One per GM, started by `am start`, stopped by `am stop`. Single writer of `~/.agent-manager/swarms/<name>/`.
+- One per GM, started by `am gm start`, stopped by `am gm stop`. Single writer of `~/.agent-manager/swarms/<name>/`.
 - **Assignment:** a task goes to the agent the GM named, else to the first idle agent. If none is idle the task stays `open` with "queued · next free agent" on the card.
 - **Workspace propagation:** every assignment and resume carries the current workspace brief; when the GM changes the brief, agents currently working get a plain note at their next turn and adapt or ask.
-- **Mailbox and escalation:** structured questions (section 6); optional triage that answers only when it can cite a note (`swarm.triage: off|notes`, off by default in v1).
+- **Mailbox and escalation:** structured questions (section 6); optional triage that answers only when it can cite a note (`tm.answers: off|notes`, off by default in v1).
 - **Watchdog:** heartbeat from transcript modification time and process id; `stallAfter` (default 15 min) → `blocked (stalled)` and an inbox event. Context watch per agent; at 90% without a checkpoint within one turn, sends the checkpoint-and-compact request.
 - **Budget guard:** per-task caps from the swarm config; crossing one pauses the run → `blocked (budget)`.
 - **Quota guard:** the profile's window from `takeSnapshot()`; at 80% the GM is told and proposes to slow down or move agents; at 95% new assignments wait as `blocked (quota, resets 14:00)`.
 
-### 10.3 The board (`am tasks`)
+### 10.3 The board (`am board`)
 
 **Header.** Line one: GM name, workspace path and branch; on the right the profile's quota bar, session count, and the GM's own context use. Line two, the **team strip**: one cell per agent with state and context: `friday-1 ▶ #12 ctx 62%`, `friday-2 ▶ #21 ctx 91% ↻ compacting`, `friday-3 ⏸ #11 waiting on you`, `friday-4 · idle, #10 when you approve`. Line three: grouping tabs, sort, filter, and on the right `N need you · friday inbox N · tasks · cost`.
 
@@ -71,7 +71,7 @@ Live: the board subscribes to the task manager, so cards move without a refresh.
 - The GM sets an initial ETA at assignment; the agent refines it after planning. Overdue tasks sort first in the ETA grouping and get a red marker.
 - Priority `P0–P3`, default `P2`.
 - Cost per task from the profile's transcripts filtered by session and run; shown in preview, detail, and as column totals.
-- Terminal bell and macOS notification when a task enters `question → you`, `plan (awaiting you)` or `review (you)`. `swarm.notify false` turns it off.
+- Terminal bell and macOS notification when a task enters `question → you`, `plan (awaiting you)` or `review (you)`. `team.notify false` turns it off.
 
 ## C. Additions beyond the brief, with reasons
 
@@ -95,8 +95,8 @@ Live: the board subscribes to the task manager, so cards move without a refresh.
 ### 13.1 Components
 
 - **`src/swarm/service.ts`** — the task manager service, one per swarm: store, assignment, mailbox, watchdog, context watch, workspace brief. Unix socket at `swarms/<name>/tm.sock`. Single writer; atomic JSON writes as in `core/config.ts`.
-- **`src/swarm/mcp.ts`** — the stdio tool bridge each session gets (`--role gm|agent --swarm friday [--agent friday-3]`); tool set scoped by role; schemas enforce the question and report shapes.
-- **`src/commands/start.ts`** — `am start`: resolve profile, register swarm, start the service, create agents, capture workspace, launch the GM via `providers/*.launch()` with tools and hooks written into the profile's config dir for this swarm.
+- **`src/swarm/mcp.ts`** — the stdio tool bridge each session gets (`--role gm|agent --gm friday [--agent friday-3]`); tool set scoped by role; schemas enforce the question and report shapes.
+- **`src/commands/start.ts`** — `am gm start`: resolve profile, register swarm, start the service, create agents, capture workspace, launch the GM via `providers/*.launch()` with tools and hooks written into the profile's config dir for this swarm.
 - **`src/commands/tasks.tsx`** — the board. Ink, `format.ts` helpers, `useInput`, socket subscription.
 - **`src/swarm/agents/{claude-code,codex}.ts`** — session adapters: headless launch, session capture, resume, compaction threshold where the tool exposes one.
 - **Reused:** `paths.ts` (+`SWARMS_DIR`), `config.ts`, `snapshot.ts` (quota), `providers/*` (env isolation, launch), `usage/pricing.ts` (cost), `doctor.ts` (verifies compaction settings and billing hazards).
@@ -161,12 +161,12 @@ interface Workspace { dir: string; branch?: string; env: Record<string,string>; 
 
 | Command | Does |
 |---|---|
-| `am start <profile> gm [name] [--agents N] [--board] [--dir <path>]` | create or resume a General Manager in this folder; opens the chat |
+| `am gm start <profile> [name] [--agents N] [--board] [--dir <path>]` | create or resume a General Manager in this folder; opens the chat |
 | `am gm [name]` · `am gm ls` | reattach to the GM chat · list GMs and their folders |
-| `am tasks [name]` (`am board`) `[--group …] [--json]` | the board |
-| `am stop [name]` | stop the agents and task manager; board state kept |
+| `am board [name]` (`am board`) `[--group …] [--json]` | the board |
+| `am gm stop [name]` | stop the agents and task manager; board state kept |
 | `am task show|add|note|answer|approve|reject|cancel|retry|reassign #id …` | act on a task from the shell |
 | `am agent ls|add|rm|move` | the team (advanced; not needed to start) |
-| `am config swarm.<key>` | `agents` `dispatch` `triage` `notify` `stallAfter` `compactAt` (default 90) |
+| `am config swarm.<key>` | `agents` `dispatch` `triage` `notify` `stallAfter` `agent.compact-at` (default 90) |
 | internal | `am mcp …`, the task manager service: never typed, never shown |
 

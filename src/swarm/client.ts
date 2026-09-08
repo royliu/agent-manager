@@ -118,7 +118,8 @@ export function servicePid(swarm: string): number | undefined {
   if (!Number.isFinite(pid) || !pidAlive(pid)) return undefined;
   try {
     const cmd = execFileSync('ps', ['-p', String(pid), '-o', 'command='], { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-    if (!cmd.includes('tm-serve') || !cmd.includes(`--swarm ${swarm}`)) return undefined; // pid was reused
+    // Task managers started before 0.7.0 run as `tm-serve --swarm <name>`.
+    if (!/tm-serve|_serve/.test(cmd) || !new RegExp(`--(swarm|gm) ${swarm}(\\s|$)`).test(cmd)) return undefined; // pid was reused
   } catch {
     return undefined;
   }
@@ -167,7 +168,7 @@ export async function ensureService(swarm: string): Promise<void> {
   fs.mkdirSync(p.dir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(socketDir(), { recursive: true, mode: 0o700 });
   const log = fs.openSync(p.log, 'a');
-  const child = spawn(process.execPath, [amEntry(), 'tm-serve', '--swarm', swarm], {
+  const child = spawn(process.execPath, [amEntry(), '_serve', '--gm', swarm], {
     detached: true,
     stdio: ['ignore', log, log],
     env: process.env,

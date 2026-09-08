@@ -8,6 +8,7 @@ import { ensureAmHome, tildify } from '../core/paths.js';
 import { getProvider, PROVIDER_ORDER, readIdentitySafe } from '../providers/index.js';
 import { bold, cyan, dim, green, red, yellow } from '../ui/format.js';
 import { closePrompts, confirm, isInteractive } from '../ui/prompt.js';
+import { detectShell, HOOK_MARKER, rcFileFor, rcPathFor, shellHookBody } from './shell.js';
 
 /**
  * First-run setup. Adopts the accounts you are *already* signed into as
@@ -62,7 +63,7 @@ export async function initCommand(opts: { yes?: boolean } = {}): Promise<void> {
   if (found.length === 0) {
     console.log('');
     console.log(dim('  Nothing signed in yet. Install a tool, sign in, then re-run `am init`.'));
-    console.log(dim('  Or run `am add` to create an isolated profile and sign in through it.'));
+    console.log(dim('  Or run `am profile add` to create an isolated profile and sign in through it.'));
     console.log('');
     closePrompts();
     return;
@@ -92,6 +93,7 @@ export async function initCommand(opts: { yes?: boolean } = {}): Promise<void> {
   if (toAdopt.length === 0) {
     console.log('');
     console.log(dim('  All of these are already registered. Run `am status` to see them.'));
+    await offerShellHook(opts.yes);
     console.log('');
     closePrompts();
     return;
@@ -140,12 +142,41 @@ export async function initCommand(opts: { yes?: boolean } = {}): Promise<void> {
     console.log(dim('    `am run` strips the critical ones automatically. See `am doctor`.'));
   }
 
+  await offerShellHook(opts.yes);
   console.log('');
   console.log('  Next:');
-  console.log(`    ${cyan('am add')}     create a second, isolated profile and sign in`);
-  console.log(`    ${cyan('am status')}  see plan, quota and consumption for every account`);
+  console.log(`    ${cyan('am profile add')}                create a second, isolated profile and sign in`);
+  console.log(`    ${cyan('am status')}                     plan, quota and consumption for every account`);
+  console.log(`    ${cyan('am gm start <profile> [name]')}  in a project folder: start a General Manager and its team`);
   console.log('');
   closePrompts();
+}
+
+/** Put the shell hook in the rc file, once, with consent; it is what lets `am profile use` change the current shell. */
+async function offerShellHook(yes?: boolean): Promise<void> {
+  if (process.env.AGENT_MANAGER_SHELL === '2') return;
+  const shell = detectShell();
+  const rc = rcFileFor(shell);
+  let current = '';
+  try {
+    current = fs.readFileSync(rcPathFor(shell), 'utf8');
+  } catch {
+    /* no rc file yet */
+  }
+  if (current.includes(HOOK_MARKER)) {
+    const isCurrent = /AGENT_MANAGER_SHELL[= ]2/.test(current);
+    console.log('');
+    console.log(dim(isCurrent ? `  The shell hook is in ${rc}; open a new terminal for it to take effect.` : `  The shell hook in ${rc} is from an older version and handles only "am use". Replace that block with the output of: am shell hook`));
+    return;
+  }
+  console.log('');
+  const ok = yes || (isInteractive() && (await confirm(`Add the shell hook to ${rc}, so "am profile use" changes this shell?`)));
+  if (!ok) {
+    console.log(dim(`  Skipped. Later: am shell hook >> ${rc} && exec ${shell}`));
+    return;
+  }
+  fs.appendFileSync(rcPathFor(shell), `\n${shellHookBody(shell)}\n`);
+  console.log(`  ${green('✓')} Shell hook added to ${rc}. ${dim(`Open a new terminal, or run: exec ${shell}`)}`);
 }
 
 /** Used by `am add` to warn when a directory is already populated. */

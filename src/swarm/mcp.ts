@@ -20,10 +20,10 @@ const ID = n('task id, the number after #');
 const ETA = s('when you expect it done: "2h", "1d", or a date/time like "2026-09-07 18:00"');
 
 const GM_TOOLS: Tool[] = [
-  { name: 'task_create', description: 'Create a task on the board. Write the description for the agent who will do it: what to build or find, where, and what done means. Every task needs an eta: your estimate of when it will be done ("2h", "1d", or a date and time); the agent refines it. Set dispatch=true to start it right away, or dispatch later with task_dispatch.', inputSchema: S({ title: s('short title'), description: s('the brief for the agent'), ask: s("the owner's original words, verbatim, on a root task"), acceptance: s('what done means, one paragraph'), notes: arr('extra context notes'), parentId: n('parent task id for a sub-task'), dependsOn: { type: 'array', items: { type: 'number' }, description: 'ids that must be done first' }, priority: n('0 urgent … 3 whenever, default 2'), eta: ETA, agent: s('agent name, or leave empty for the first idle agent'), planFirst: b('agent writes a plan the owner approves before code'), useWorktree: b('give the task its own git worktree and branch'), reviewBy: { type: 'string', enum: ['gm', 'user'], description: 'who gives final acceptance; default user' }, dispatch: b('start it now') }, ['title', 'description', 'eta']) },
+  { name: 'task_create', description: 'Create a task on the board. Write the description for the agent who will do it: what to build or find, where, and what done means. Every task needs an eta: your estimate of when it will be done ("2h", "1d", or a date and time); the agent refines it. Set start=true to begin work right away, or start it later with task_start.', inputSchema: S({ title: s('short title'), description: s('the brief for the agent'), ask: s("the owner's original words, verbatim, on a root task"), acceptance: s('what done means, one paragraph'), notes: arr('extra context notes'), parentId: n('parent task id for a sub-task'), dependsOn: { type: 'array', items: { type: 'number' }, description: 'ids that must be done first' }, priority: n('0 urgent … 3 whenever, default 2'), eta: ETA, agent: s('agent name, or leave empty for the first idle agent'), planFirst: b('agent writes a plan the owner approves before code'), useWorktree: b('give the task its own git worktree and branch'), reviewBy: { type: 'string', enum: ['gm', 'user'], description: 'who gives final acceptance; default user' }, start: b('start work on it now') }, ['title', 'description', 'eta']) },
   { name: 'task_update', description: 'Change a task: title, description, priority, eta, dependsOn, planFirst, useWorktree, reviewBy.', inputSchema: S({ id: ID, title: s(''), description: s(''), priority: n(''), eta: ETA, dependsOn: { type: 'array', items: { type: 'number' } }, planFirst: b(''), useWorktree: b(''), reviewBy: { type: 'string', enum: ['gm', 'user'] }, by: s('') }, ['id']) },
-  { name: 'task_dispatch', description: 'Ask the task manager to start a task: on the named agent, or the first idle one. Held automatically while dependencies are unfinished.', inputSchema: S({ id: ID, agent: s('agent name, optional') }, ['id']) },
-  { name: 'task_reassign', description: 'Move a task to another agent. A running agent is asked to stop and the new one continues from the notes.', inputSchema: S({ id: ID, agent: s('agent name') }, ['id', 'agent']) },
+  { name: 'task_start', description: 'Start work on a task: on the named agent, or the first idle one. Held automatically while dependencies are unfinished.', inputSchema: S({ id: ID, agent: s('agent name, optional') }, ['id']) },
+  { name: 'task_assign', description: 'Give a task to another agent. A running agent is stopped and the new one continues from the notes.', inputSchema: S({ id: ID, agent: s('agent name') }, ['id', 'agent']) },
   { name: 'task_note', description: 'Add a note to a task: a decision, acceptance criteria, context, a finding. Agents see notes in their brief.', inputSchema: S({ id: ID, kind: { type: 'string', enum: ['context', 'decision', 'plan', 'acceptance', 'finding'], description: 'default context' }, text: s('a complete sentence or two') }, ['id', 'text']) },
   { name: 'task_answer', description: "Answer an agent's open question on a task. The answer becomes a note and the agent continues with it.", inputSchema: S({ id: ID, answer: s('plain-English answer') }, ['id', 'answer']) },
   { name: 'task_escalate', description: 'Put an open question to the owner, with your own view. Use when the ask, the notes and your design do not settle it. The owner can answer on the board or in chat.', inputSchema: S({ id: ID, view: s('your recommendation, one or two sentences') }, ['id']) },
@@ -108,17 +108,20 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
     let out: string;
     switch (name) {
       case 'task_create': {
+        if (a.start !== undefined && a.dispatch === undefined) a = { ...a, dispatch: a.start };
         const t = await client.call<Task>('task.create', a);
         out = `Created #${t.id} ${t.title} (${statusLabel(t, gm)}${t.agent ? `, ${t.agent}` : ''}). Refer to it as #${t.id}.`;
         if (t.eta && t.eta - Date.now() > 6 * 3_600_000) {
           const team = await client.call<Agent[]>('team.list');
           const idle = team.filter((x) => x.state === 'idle' && !x.paused).length;
-          if (idle > 0) out += `\n\nThis task is estimated at more than six hours and ${idle} agent${idle === 1 ? ' is' : 's are'} idle. If it has independent parts, split it into separate tasks and dispatch them in parallel; the job then takes as long as its longest part.`;
+          if (idle > 0) out += `\n\nThis task is estimated at more than six hours and ${idle} agent${idle === 1 ? ' is' : 's are'} idle. If it has independent parts, split it into separate tasks and start them in parallel; the job then takes as long as its longest part.`;
         }
         break;
       }
       case 'task_update': out = fmtTask(await client.call<Task>('task.update', a), gm); break;
+      case 'task_start':
       case 'task_dispatch': { const t = await client.call<Task>('task.dispatch', a); out = `#${t.id} → ${statusLabel(t, gm)}${t.agent ? ` · ${t.agent}` : ' · next idle agent'}`; break; }
+      case 'task_assign':
       case 'task_reassign': { const t = await client.call<Task>('task.reassign', a); out = `#${t.id} → ${t.agent}`; break; }
       case 'task_note': { const r = await client.call<{ message?: string }>('task.note', { ...a, author: opts.role === 'agent' ? opts.agent : gm }); out = r.message ?? `Noted on #${id}.`; break; }
       case 'task_progress': await client.call('task.progress', a); out = 'Progress noted.'; break;
@@ -127,7 +130,7 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
       case 'task_answer': { const t = await client.call<Task>('task.answer', a); out = `Answered. #${t.id} is now ${statusLabel(t, gm)}; ${t.agent ?? 'the agent'} continues with your answer.`; break; }
       case 'task_escalate': { const t = await client.call<Task>('task.escalate', a); out = `The question on #${t.id} is now with the owner. Tell them in plain words, in the five-part shape, with your view.`; break; }
       case 'task_approve': { const t = await client.call<Task>('task.approve', a); out = `#${t.id} → ${statusLabel(t, gm)}.`; break; }
-      case 'task_reject': { const t = await client.call<Task>('task.reject', a); out = a.feedback ? `#${t.id} → ${statusLabel(t, gm)}; ${t.agent ?? 'the agent'} continues with your feedback.` : `#${t.id} stopped and on hold; dispatch it again when it should continue.`; break; }
+      case 'task_reject': { const t = await client.call<Task>('task.reject', a); out = a.feedback ? `#${t.id} → ${statusLabel(t, gm)}; ${t.agent ?? 'the agent'} continues with your feedback.` : `#${t.id} stopped and on hold; start it again when it should continue.`; break; }
       case 'task_report': { const r = await client.call<{ message: string }>('task.report', a); out = r.message; break; }
       case 'task_checkpoint': { const r = await client.call<{ message: string }>('task.checkpoint', a); out = r.message; break; }
       case 'task_cancel': { const t = await client.call<Task>('task.cancel', a); out = `#${t.id} cancelled.`; break; }

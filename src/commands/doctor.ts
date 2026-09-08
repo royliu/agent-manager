@@ -57,7 +57,7 @@ export async function doctorCommand(): Promise<void> {
     findings.push({
       level: 'warn',
       title: 'No profiles registered',
-      fix: 'am init   (adopt existing logins)   or   am add   (create a new one)',
+      fix: 'am init   (adopt existing logins)   or   am profile add   (create a new one)',
     });
   }
 
@@ -82,7 +82,7 @@ export async function doctorCommand(): Promise<void> {
         level: 'error',
         title: `Profile "${p.name}" directory is missing`,
         detail: tildify(p.home),
-        fix: `am rm ${p.name}   then re-add it`,
+        fix: `am profile rm ${p.name}   then add it again`,
       });
       continue;
     }
@@ -117,28 +117,35 @@ export async function doctorCommand(): Promise<void> {
       level: 'error',
       title: `${listPhrase(names.map((n) => `"${n}"`))} are one ${getProvider(dup.provider).displayName} subscription`,
       detail: `${dup.account} - one plan, ${names.length} profiles, so quota and usage are counted ${names.length}x`,
-      fix: `am rm ${redundantMember(dup).name}   (or sign it into a different account)`,
+      fix: `am profile rm ${redundantMember(dup).name}   (or sign it into a different account)`,
     });
   }
 
   // 4. Shell integration.
-  const hooked = Boolean(process.env.AGENT_MANAGER_SHELL);
+  const hooked = process.env.AGENT_MANAGER_SHELL;
   findings.push(
-    hooked
-      ? { level: 'ok', title: 'Shell integration active' }
-      : {
-          level: 'warn',
-          title: 'Shell integration not installed',
-          detail: '`am use` will not change the current shell without it',
-          fix: 'am shell-init >> ~/.zshrc && exec zsh',
-        },
+    hooked === '2'
+      ? { level: 'ok', title: 'Shell hook active' }
+      : hooked
+        ? {
+            level: 'warn',
+            title: 'Shell hook is from an older version',
+            detail: 'it handles `am use` but not `am profile use`',
+            fix: 'replace the agent-manager block in ~/.zshrc with the output of: am shell hook',
+          }
+        : {
+            level: 'warn',
+            title: 'Shell hook not installed',
+            detail: '`am profile use` will not change the current shell without it',
+            fix: 'am init   (or: am shell hook >> ~/.zshrc && exec zsh)',
+          },
   );
 
   // 5. General Managers and their teams.
   const swarms = listSwarms();
   const swarmCfg = loadSwarmConfig();
   if (swarms.length === 0) {
-    findings.push({ level: 'ok', title: 'No General Managers yet', fix: 'am start <profile> gm [name]   (in a project folder)' });
+    findings.push({ level: 'ok', title: 'No General Managers yet', fix: 'am gm start <profile> [name]   (in a project folder)' });
   } else {
     for (const s of swarms) {
       const running = serviceRunning(s.name);
@@ -146,7 +153,7 @@ export async function doctorCommand(): Promise<void> {
         level: 'ok',
         title: `${s.name}: ${running ? 'team running' : 'stopped'}`,
         detail: `${s.profile} · ${tildify(s.dir)}`,
-        fix: running ? undefined : `am gm ${s.name}   (or am start in ${tildify(s.dir)})`,
+        fix: running ? undefined : `am gm ${s.name}   (opens the conversation and starts the team)`,
       });
     }
   }

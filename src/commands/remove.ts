@@ -10,7 +10,7 @@ export async function removeCommand(
   name: string,
   opts: { provider?: ProviderId; purge?: boolean; yes?: boolean } = {},
 ): Promise<void> {
-  const profile = resolveProfile(name, { provider: opts.provider, command: 'am rm' });
+  const profile = resolveProfile(name, { provider: opts.provider, command: 'am profile rm' });
   if (!profile) return;
 
   removeProfile(profile.name, profile.provider);

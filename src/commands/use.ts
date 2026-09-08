@@ -12,7 +12,7 @@ export async function useCommand(
   name: string,
   opts: { provider?: ProviderId } = {},
 ): Promise<void> {
-  const profile = resolveProfile(name, { provider: opts.provider, command: 'am use' });
+  const profile = resolveProfile(name, { provider: opts.provider, command: 'am profile use' });
   if (!profile) return;
 
   setActive(profile.provider, profile.name);
@@ -46,17 +46,17 @@ export async function useCommand(
     `  ${yellow('!')} ${bold('This shell is unchanged')} — running \`${impl.short}\` here still uses ` +
       `whatever profile it used before.`,
   );
-  console.log(`    ${dim('am use only records the preference; it cannot export into the parent shell.')}`);
+  console.log(`    ${dim('am profile use only records the preference; it cannot export into the parent shell.')}`);
   console.log('');
   const run = `am run ${profile.name}`;
-  const evalEnv = `eval "$(am env ${profile.name})"`;
+  const evalEnv = `eval "$(am shell env ${profile.name})"`;
   const pad = Math.max(run.length, evalEnv.length) + 2;
   console.log(`  ${bold('Use the profile now:')}`);
   console.log(`    ${cyan(run)}${' '.repeat(pad - run.length)}${dim('no setup needed')}`);
   console.log(`    ${cyan(evalEnv)}${' '.repeat(pad - evalEnv.length)}${dim('switch just this shell')}`);
   console.log('');
-  console.log(`  ${bold('Make `am use` work everywhere (once):')}`);
-  console.log(`    ${cyan('am shell-init >> ~/.zshrc && exec zsh')}`);
+  console.log(`  ${bold('Make `am profile use` work everywhere (once):')}`);
+  console.log(`    ${cyan('am shell hook >> ~/.zshrc && exec zsh')}   ${dim('(am init offers this too)')}`);
   console.log('');
 }
 
@@ -101,7 +101,7 @@ export function envCommand(name: string, opts: { provider?: ProviderId } = {}): 
 export function whichCommand(): void {
   const { profiles } = loadConfig();
   if (profiles.length === 0) {
-    console.log(dim('No profiles registered. Run `am init` or `am add`.'));
+    console.log(dim('No profiles registered. Run `am init` or `am profile add`.'));
     return;
   }
   const seen = new Set<ProviderId>();

@@ -425,7 +425,7 @@ function footer(st: UiState, snap: BoardSnapshot, W: number, sel?: Task): string
   if (st.view === 'detail') {
     const keys = narrow
       ? [k('reply', 'r'), k('approve', 'a'), k('back', 'x'), k('note', 'n'), k('cancel', 'c'), k('close', 'esc')]
-      : [k('reply', 'r'), k('approve', 'a'), k('stop / send back', 'x'), k('note', 'n'), k('reassign', 'm'), k('priority', 'p'), k('log', 't'), k('worktree', 'o'), k('cancel', 'c'), k('scroll', '↑↓'), k('back', 'esc')];
+      : [k('reply', 'r'), k('approve', 'a'), k('stop / send back', 'x'), k('note', 'n'), k('assign', 'm'), k('priority', 'p'), k('log', 't'), k('worktree', 'o'), k('cancel', 'c'), k('scroll', '↑↓'), k('back', 'esc')];
     return '  ' + keys.join(sep);
   }
   const keys = narrow
@@ -695,7 +695,7 @@ const Board: React.FC<{ swarm: string; group: Group; sizeOverride?: { W: number;
       if (s.needYou > lastNeed.current) process.stdout.write('\x07');
       lastNeed.current = s.needYou;
     } catch {
-      // The task manager went away (am stop, a crash): bring it back and resubscribe.
+      // The task manager went away (am gm stop, a crash): bring it back and resubscribe.
       if (reconnecting.current) return;
       reconnecting.current = true;
       try {

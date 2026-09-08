@@ -15,6 +15,8 @@ import { resolveProfile } from './resolve.js';
 
 interface StartOptions {
   agents?: string;
+  /** false with --no-open: start the team in the background and return. */
+  open?: boolean;
   gmModel?: string;
   tmModel?: string;
   agentModel?: string;
@@ -57,14 +59,17 @@ function captureWorkspace(dir: string): Workspace {
   };
 }
 
-/** `am start <profile> gm [name]`: set up the team in this folder and hand the terminal to the GM. */
-export async function startCommand(profileName: string, kind: string, nameArg: string | undefined, opts: StartOptions): Promise<void> {
-  if (kind !== 'gm') {
-    console.error(`${red('✗')} Only a General Manager can be started here: ${cyan(`am start ${profileName} gm [name]`)}`);
+/** Names that would collide with `am gm` subcommands. */
+const RESERVED_GM_NAMES = new Set(['start', 'open', 'stop', 'ls', 'list', 'show', 'rm', 'remove']);
+
+/** `am gm start <profile> [name]`: set up the team in this folder and open the GM's conversation. */
+export async function startCommand(profileName: string, nameArg: string | undefined, opts: StartOptions): Promise<void> {
+  if (nameArg && RESERVED_GM_NAMES.has(nameArg)) {
+    console.error(`${red('✗')} "${nameArg}" is a command word; pick another name for the General Manager.`);
     process.exitCode = 1;
     return;
   }
-  const profile = resolveProfile(profileName, { command: 'am start' });
+  const profile = resolveProfile(profileName, { command: 'am gm start' });
   if (!profile) return;
   if (profile.provider !== 'claude-code' && profile.provider !== 'codex') {
     console.error(`${red('✗')} ${profile.name} is a ${getProvider(profile.provider).displayName} profile; a GM needs Claude Code or Codex.`);
@@ -77,7 +82,7 @@ export async function startCommand(profileName: string, kind: string, nameArg: s
   let meta = swarmForDir(dir);
   if (meta && nameArg && nameArg !== meta.name) {
     console.error(`${red('✗')} This folder already has a General Manager named ${bold(meta.name)}.`);
-    console.error(`  ${dim('Come back to it:')} ${cyan('am gm')}   ${dim('or stop it first:')} ${cyan(`am stop ${meta.name}`)}`);
+    console.error(`  ${dim('Come back to it:')} ${cyan('am gm')}   ${dim('or stop it first:')} ${cyan(`am gm stop ${meta.name}`)}`);
     process.exitCode = 1;
     return;
   }
@@ -141,7 +146,12 @@ export async function startCommand(profileName: string, kind: string, nameArg: s
   console.log(`  ${green('✓')} task manager and ${team.length} task agent${team.length === 1 ? '' : 's'} ${fresh ? 'ready' : 'back'}: ${team.map((a) => a.name).join(' ')} ${dim(`(${fresh ? 'idle' : 'as they were'}, ${profile.name})`)}`);
   console.log(`  ${green('✓')} models: ${modelsLines(models, meta.name).join(dim(' · '))}`);
   console.log(`  ${green('✓')} workspace: ${ws?.dir ?? dir}${ws?.branch ? ` · ${ws.branch}` : ''}${ws?.tools.node ? ` · node ${ws.tools.node.replace(/^v/, '')}` : ''} · your shell environment ${dim('(API keys stripped)')}`);
-  console.log(`  ${dim(`▸ ${fresh ? 'starting' : 'resuming'} ${getProvider(profile.provider).displayName} as ${meta.name}… the board is`)} ${cyan('am tasks')} ${dim('in another terminal')}`);
+  if (opts.open === false) {
+    console.log(`  ${dim(`▸ ${meta.name}'s team is running in the background.`)} ${cyan(`am gm ${meta.name}`)} ${dim('opens the conversation ·')} ${cyan(`am board ${meta.name}`)} ${dim('the board')}`);
+    console.log('');
+    return;
+  }
+  console.log(`  ${dim(`▸ ${fresh ? 'starting' : 'resuming'} ${getProvider(profile.provider).displayName} as ${meta.name}… the board is`)} ${cyan('am board')} ${dim('in another terminal')}`);
   console.log('');
 
   const resume = !fresh && !!meta.gmSessionId;
@@ -154,13 +164,13 @@ export async function startCommand(profileName: string, kind: string, nameArg: s
   if (opts.keepApiKeys) spec.env = getProvider(profile.provider).launch(profile.home, spec.args, { keepApiKeys: true }).env;
   if (opts.dryRun) {
     console.log(`  ${dim('would run:')} ${spec.command} ${spec.args.map((a) => (a.length > 60 ? `'${a.slice(0, 57)}…'` : a)).join(' ')}`);
-    console.log(`  ${dim('in')} ${dir} ${dim('with')} ${Object.keys(spec.env).filter((k) => k === 'CLAUDE_CONFIG_DIR' || k === 'CODEX_HOME' || k === 'AM_SWARM').map((k) => `${k}=${spec.env[k]}`).join(' ')}`);
+    console.log(`  ${dim('in')} ${dir} ${dim('with')} ${Object.keys(spec.env).filter((k) => k === 'CLAUDE_CONFIG_DIR' || k === 'CODEX_HOME' || k === 'AM_GM').map((k) => `${k}=${spec.env[k]}`).join(' ')}`);
     return;
   }
   closePrompts();
   process.chdir(dir);
   const code = await runForeground(spec);
   console.log('');
-  console.log(`  ${dim(`${meta.name}'s team keeps working in the background.`)} ${cyan('am gm')} ${dim('to come back ·')} ${cyan('am tasks')} ${dim('for the board ·')} ${cyan(`am stop`)} ${dim('to stop the team')}`);
+  console.log(`  ${dim(`${meta.name}'s team keeps working in the background.`)} ${cyan('am gm')} ${dim('to come back ·')} ${cyan('am board')} ${dim('for the board ·')} ${cyan('am gm stop')} ${dim('to stop the team')}`);
   process.exitCode = code;
 }

@@ -23,6 +23,16 @@ will meet day to day.
 13. [Updating `am`](#13-updating-am)
 14. [Troubleshooting](#14-troubleshooting)
 
+**How commands are named.** A noun, then a verb: `am profile add`, `am gm start`, `am task stop`.
+The nouns are the things in the story: `profile` (one account of one tool), `gm` (the General
+Manager; its name stands for its whole team), `board`, `task`, `agent`, and `shell` for
+plumbing. Each verb means one thing everywhere: `start` and `stop` for work that runs in the
+background, whether a GM or a task; `open` for a conversation; `run` for a tool in the
+foreground; `use` for a switch that stays in effect; `ls`, `add`, `rm`, `show`, `assign` and
+`move` on the collections. Four shortcuts drop the noun: `am` (status), `am run`, `am gm`
+(open) and `am board`. Names from before 0.7.0, such as `am tasks` or `am start`, still work
+and print the new name.
+
 ---
 
 ## 1. Install
@@ -36,13 +46,14 @@ cd agent-manager
 npm install
 npm run build
 npm install -g .          # puts `am` on your PATH (or `npm link` while developing)
-am --version              # 0.6.0
+am --version              # 0.7.0
 ```
 
-Then add the shell hook once, so `am use` can change the profile of your current shell:
+`am init` (next section) offers to install the shell hook, which lets `am profile use` switch
+the profile of your current shell. To add it by hand:
 
 ```sh
-am shell-init >> ~/.zshrc && exec zsh      # bash and fish work too: am shell-init bash
+am shell hook >> ~/.zshrc && exec zsh      # bash and fish work too: am shell hook bash
 ```
 
 ## 2. Profiles: one per subscription
@@ -64,10 +75,10 @@ removing and re-adding, but the names only matter to you.
 **Add a second account.** For a personal Max plan next to a work Pro plan, say:
 
 ```sh
-am add personal            # pick the tool, then sign in when it opens
+am profile add personal            # pick the tool, then sign in when it opens
 ```
 
-`am add` creates the directory, then launches the tool inside it so you can sign in with
+`am profile add` creates the directory, then launches the tool inside it so you can sign in with
 `/login` (Claude Code) or `codex login`. When you come back it confirms the account and plan.
 
 **Check everything:**
@@ -79,7 +90,7 @@ am doctor                  # installs, logins, isolation, and billing-override v
 ```
 
 **The billing trap.** `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in your shell silently
-overrides subscription login and bills you per token. `am run` and `am start` strip both by
+overrides subscription login and bills you per token. `am run` and `am gm start` strip both by
 default, and `am doctor` warns when one is set. Pass `--keep-api-keys` when you really want
 API billing.
 
@@ -88,7 +99,7 @@ API billing.
 ```sh
 am run personal                    # Claude Code on the personal profile
 am run work -- --resume            # everything after the name goes to the tool
-am use work                        # make work the active profile for this shell
+am profile use work                # make work the active profile for this shell
 ```
 
 ## 3. Start your first team
@@ -98,7 +109,7 @@ becomes the GM's name and the prefix of its agents.
 
 ```sh
 cd ~/Projects/genie
-am start personal gm friday
+am gm start personal friday
 ```
 
 What happens:
@@ -117,24 +128,25 @@ Friday opens with a short hello and asks what you want done. The board is in ano
 terminal:
 
 ```sh
-am tasks
+am board
 ```
 
 That is the whole surface: you talk to Friday, you watch the board. The task manager and the
 agents are Friday's business.
 
-Options on `am start`:
+Options on `am gm start`:
 
 | Flag | Meaning |
 |---|---|
-| `--agents N` | create N task agents instead of the default 4 (`swarm.agents`) |
+| `--agents N` | create N task agents instead of the default 4 (`team.size`) |
 | `--gm-model`, `--tm-model`, `--agent-model <model>` | models for this GM only, remembered (see [Models](#8-models)) |
 | `--dir <path>` | use another folder as the workspace |
+| `--no-open` | start the team in the background and return; `am gm` opens the conversation later |
 | `--dry-run` | set everything up and print the command instead of starting the session |
 | `--keep-api-keys` | do not strip `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
 
 If you leave out the name, the folder's name is used. One folder has one GM; running
-`am start` again in the same folder resumes it.
+`am gm start` again in the same folder resumes it.
 
 ## 4. Talking to the General Manager
 
@@ -142,10 +154,10 @@ Talk to Friday the way you would brief a lead engineer. Plain language, whatever
 have. Friday discusses first and formalises second: it asks when the ask is ambiguous,
 proposes trade-offs rather than guessing, and only then turns the work into tasks.
 
-**Proposing before dispatching.** By default Friday shows you the tasks it would create,
+**Proposing before starting.** By default Friday shows you the tasks it would create,
 each with a title, an owner and a rough size, and waits for your go. Say "go" and it
-creates and dispatches them. If you prefer Friday to just start on clear single tasks, set
-`am config swarm.dispatch auto`.
+creates and starts them. If you prefer Friday to just start on clear single tasks, set
+`am config gm.propose false`.
 
 **Tasks have ids.** Every task is `#12`-style. Use the id in conversation: "how is #12
 going", "cancel #14", "make #15 depend on #12". Sub-tasks get their own ids and point at
@@ -155,7 +167,7 @@ their parent.
 agent refines it as it works. The board shows the ETA and a countdown.
 
 **Parallel work.** When an ask has independent parts, Friday makes one task per part and
-dispatches them to different agents at once, so a five-part job takes as long as its
+starts them on different agents at once, so a five-part job takes as long as its
 longest part. Tasks that touch the same files can be given their own git worktree so the
 agents do not step on each other.
 
@@ -184,10 +196,10 @@ context use, and how many items on the board need you. If the profile has
 ## 5. The board
 
 ```sh
-am tasks                    # the GM for this folder
-am tasks friday             # a GM by name, from anywhere
-am tasks -g agent           # group by agent (or eta) instead of status
-am tasks --json             # the whole board as JSON, for scripts
+am board                    # the GM for this folder
+am board friday             # a GM by name, from anywhere
+am board -g agent           # group by agent (or eta) instead of status
+am board --json             # the whole board as JSON, for scripts
 ```
 
 **Two layouts.** In a wide terminal it is a kanban: one column per status, a detail pane on
@@ -225,7 +237,7 @@ the agent's own estimates as it reports each step.
 | `x` | on running or blocked work: stop it (type feedback first to redirect instead); on a report or plan: send it back with feedback |
 | `n` | add a note to the task |
 | `p` | change priority |
-| `m` | reassign to another agent |
+| `m` | assign to another agent |
 | `c` | cancel the task |
 | `t` | open the agent's run log |
 | `o` | open the task's worktree |
@@ -234,7 +246,7 @@ the agent's own estimates as it reports each step.
 | `q` | quit; the team keeps working |
 
 **Terminal size.** If a terminal host reports its size wrong and the board looks cut off,
-force it: `am tasks --size 160x48`, or set `AM_BOARD_SIZE=160x48`.
+force it: `am board --size 160x48`, or set `AM_BOARD_SIZE=160x48`.
 
 ## 6. Questions, reviews and stopping work
 
@@ -269,13 +281,13 @@ waits for your acceptance. `a` accepts; `x` with feedback sends it back and the 
 resumes on your feedback in the same session.
 
 **Stopping work.** `x` on a running task ends the agent's process and puts the task on hold.
-Type feedback before pressing `x` and the agent is restarted on it instead. Dispatch a task
-on hold again from Friday or with `am task dispatch 12`.
+Type feedback before pressing `x` and the agent is restarted on it instead. Start a task
+on hold again from Friday or with `am task start 12`.
 
 **Dependencies.** If `#20` needs `#17` first, say so; the task manager holds `#20` until
 `#17` is done and then starts it on the first idle agent.
 
-**Context limits.** Each agent watches its own context. At 90% (`swarm.compactAt`) it writes
+**Context limits.** Each agent watches its own context. At 90% (`agent.compact-at`) it writes
 a checkpoint note on its task (done, left, next step, decisions and why), refreshes its
 project memory, and is continued in a fresh session from the note. You see it on the board
 as "compacting"; nothing is lost because the board is the memory.
@@ -285,15 +297,15 @@ as "compacting"; nothing is lost because the board is the memory.
 ```sh
 am task ls                                  # every open task
 am task show 12                             # one task in full
-am task add "Title" --description "…" --eta 2h [--agent friday-2] [--dispatch]
+am task add "Title" --description "…" --eta 2h [--agent friday-2] [--start]
 am task note 12 "Acceptance: the empty case is covered by a test."
 am task eta 12 4h
 am task approve 12 ["what you checked"]
 am task reject 12 "what to change and why"  # or: am task stop 12
-am task cancel 12 · am task retry 12 · am task dispatch 12 · am task reassign 12 friday-3
+am task cancel 12 · am task retry 12 · am task start 12 · am task assign 12 friday-3
 ```
 
-Add `--swarm <name>` when you are not in the GM's folder, `--json` for machine output.
+Add `--gm <name>` when you are not in the GM's folder, `--json` for machine output.
 
 ## 7. The team
 
@@ -311,7 +323,7 @@ the task manager stay on one, some agents run on the other. Codex profiles work 
 agents use the same task tools, and have their own model setting because Codex has its own
 model names. Note that Codex has been exercised less than Claude Code here.
 
-The number of agents a new GM starts with is `swarm.agents` (default 4), or `--agents N`.
+The number of agents a new GM starts with is `team.size` (default 4), or `--agents N`.
 
 ## 8. Models
 
@@ -319,15 +331,15 @@ Three groups, each yours to set:
 
 | Group | Setting for every GM | For one GM only |
 |---|---|---|
-| General manager | `am config swarm.gmModel opus` | `am start personal gm friday --gm-model opus` |
-| Task manager | `am config swarm.tmModel opus` | `--tm-model opus` |
-| Task agents | `am config swarm.agentModel opus` | `--agent-model opus` |
-| Task agents on Codex | `am config swarm.codexAgentModel <name>` | `--codex-agent-model <name>` |
+| General manager | `am config model.gm opus` | `am gm start personal friday --gm-model opus` |
+| Task manager | `am config model.tm opus` | `--tm-model opus` |
+| Task agents | `am config model.agents opus` | `--agent-model opus` |
+| Task agents on Codex | `am config model.codex-agents <name>` | `--codex-agent-model <name>` |
 
 By default every group runs on the profile's own model: the `model` in that profile's
 Claude Code `settings.json`, or Codex `config.toml`, or the tool's built-in default when
 neither is set. A setting for one GM beats the global one. `default` puts a group back on
-the profile's model: `am config swarm.tmModel default`, or `--tm-model default`.
+the profile's model: `am config model.tm default`, or `--tm-model default`.
 
 Model names are whatever the tool accepts: `opus`, `sonnet`, a full id such as
 `claude-fable-5-1[1m]`. The `[1m]` suffix also tells `am` the model has a 1M context window,
@@ -340,52 +352,58 @@ When a change applies: the GM's model the next time you open the conversation wi
 the task manager's at its next answer; the agents' at their next run. Running work finishes
 on the model it started with.
 
-`am start`, `am agent ls`, the board's task detail and Friday's team list all show which
+`am gm start`, `am agent ls`, the board's task detail and Friday's team list all show which
 model each group runs on and where the choice came from: set for this GM, set with
 `am config`, or the profile default.
 
 ## 9. Settings
 
-`am config` with no arguments lists every setting with its value. `am config swarm.<key>
-<value>` sets one for every GM and reloads running task managers; `am config swarm.<key>
-default` clears it.
+`am config` with no arguments lists every setting with its value and meaning. `am config
+<group.key> <value>` sets one for every GM and reloads running task managers; `am config
+<group.key> default` clears it. Keys are grouped by the thing they describe.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `agents` | 4 | task agents a new GM starts with |
-| `dispatch` | `propose` | `propose`: Friday shows tasks and waits for your go · `auto`: single clear tasks start at once |
-| `triage` | `most` | who answers agents' questions: `most`: the task manager reasons and answers, escalating rarely · `notes`: it answers only what a note settles · `off`: everything goes to Friday |
-| `gmModel`, `tmModel`, `agentModel`, `codexAgentModel` | unset | models per group; unset means the profile's own model |
-| `notify` | true | desktop notification when something needs you |
-| `stallAfterMin` | 15 | minutes without activity before an agent is marked stalled |
-| `compactAt` | 90 | context percentage at which an agent checkpoints and gets a fresh session |
-| `contextWindow` | 200000 | assumed window for models without a `[1m]` marker |
-| `permissionMode` | `acceptEdits` | Claude Code permission mode for agents |
-| `allow` | Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, the task tools | tools agents may use without asking |
-| `budgetUsd` | unset | list-price budget per agent per day; work pauses when it is reached |
-| `quotaWarnAt`, `quotaHoldAt` | 80, 95 | subscription quota percentages at which you are warned, and at which new work is held |
-| `hud` | true | show the profile's own status line (claude-hud if installed) above the swarm line in the GM session |
-| `compactEnv` | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | environment variable used to ask the tool to compact at `compactAt` too |
+| `model.gm`, `model.tm`, `model.agents` | unset | the model of each group; unset means the profile's own model |
+| `model.codex-agents` | unset | the model for task agents on Codex profiles, which has its own names |
+| `team.size` | 4 | task agents a new GM starts with |
+| `team.notify` | true | desktop notification when something needs you |
+| `gm.propose` | true | true: Friday shows the tasks it would create and waits for your go · false: clear single tasks start at once |
+| `gm.hud` | true | show the profile's own status line (claude-hud if installed) above Friday's line |
+| `tm.answers` | `most` | which questions the task manager answers itself: `most` (reasons and answers, escalates rarely) · `notes` (only what a note settles) · `off` (everything goes to Friday) |
+| `agent.permissions` | `acceptEdits` | Claude Code permission mode for agents |
+| `agent.allow` | Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, the task tools | tools agents may use without asking |
+| `agent.compact-at` | 90 | context percentage at which an agent checkpoints and gets a fresh session |
+| `agent.stall-after` | 15 | minutes without activity before an agent counts as stalled |
+| `agent.context-window` | 200000 | assumed window for models without a `[1m]` marker |
+| `agent.compact-env` | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | environment variable that asks the tool itself to compact at `agent.compact-at` |
+| `limits.budget-usd` | unset | list-price budget per agent per day; work pauses when it is reached |
+| `limits.quota-warn`, `limits.quota-hold` | 80, 95 | subscription quota percentages at which you are warned, and at which new work is held |
+
+Names from before 0.7.0 (`swarm.agentModel`, `swarm.compactAt`, …) are accepted and mapped to
+these.
 
 ## 10. Coming back, stopping, several projects
 
 ```sh
-am gm                 # reopen Friday's conversation in this folder, where you left it
-am gm friday          # by name, from anywhere
+am gm                 # open Friday's conversation in this folder, where you left it
+am gm friday          # by name, from anywhere (am gm open friday is the long form)
 am gm ls              # every GM, its profile, whether its team is running, its folder
-am stop               # stop the team and the task manager here; the board is kept
-am stop friday
+am gm show friday     # one GM in full: models, team, workspace, what needs you
+am gm stop            # stop the team and the task manager here; the board is kept
+am gm stop friday
+am gm rm friday       # forget a stopped GM's records; the project folder is untouched
 ```
 
 You can close Friday's terminal at any time; the team keeps working in the background and
-the board stays live. `am gm` resumes the same conversation. `am stop` ends the agents'
+the board stays live. `am gm` resumes the same conversation. `am gm stop` ends the agents'
 processes and the task manager; tasks, notes, questions, runs and the agents' memories all
-stay, and the next `am start` or `am gm` picks them up.
+stay, and the next `am gm start` or `am gm` picks them up.
 
 **Several projects.** One folder, one GM. Each project folder gets its own GM with its own
 team, task manager and board, on whichever profile you choose. A git worktree is its own
-folder and can have its own GM. `am gm ls` lists them; `am tasks <name>` and
-`am task … --swarm <name>` address one from anywhere.
+folder and can have its own GM. `am gm ls` lists them; `am board <name>` and
+`am task … --gm <name>` address one from anywhere.
 
 ## 11. Costs and quota
 
@@ -394,9 +412,9 @@ context use. The board header shows the profile's quota window. `am status` show
 profile's plan, quota and 24-hour consumption. The dollar figures are the list price of the
 same work, not what you are charged: on a subscription it is the value your plan absorbed.
 
-Guard rails: `swarm.budgetUsd` pauses an agent for the day when its list-price usage passes
-the budget; `swarm.quotaHoldAt` holds new work when the subscription's quota window is
-nearly used, and `quotaWarnAt` warns you before that. `K` on the board pauses everyone at
+Guard rails: `limits.budget-usd` pauses an agent for the day when its list-price usage passes
+the budget; `limits.quota-hold` holds new work when the subscription's quota window is
+nearly used, and `limits.quota-warn` warns you before that. `K` on the board pauses everyone at
 once.
 
 ## 12. Where things live
@@ -433,8 +451,8 @@ Then, for each running GM, restart the task manager so it runs the new code, and
 GM so its session loads any new tools:
 
 ```sh
-am stop friday
-am tasks              # starts the new task manager
+am gm stop friday
+am board              # starts the new task manager
 am gm                 # reopens Friday with the new instructions
 ```
 
@@ -442,22 +460,22 @@ Friday's conversation and the agents' state survive this.
 
 ## 14. Troubleshooting
 
-**The board says it cannot connect, or `am tasks` errors with a socket path.** The task
-manager died or a stale pid file is left over. `am stop <gm>` then `am tasks` starts a clean
+**The board says it cannot connect, or `am board` errors with a socket path.** The task
+manager died or a stale pid file is left over. `am gm stop <gm>` then `am board` starts a clean
 one. Sockets live in `/tmp/am-<uid>/`.
 
 **Friday does not know about a new feature after an update.** Friday's session was started
-before the update. `am stop`, `am tasks`, then `am gm`.
+before the update. `am gm stop`, `am board`, then `am gm`.
 
 **The board is cut off or the wrong size.** The terminal host reported a wrong size.
-`am tasks --size <cols>x<rows>` or `AM_BOARD_SIZE`.
+`am board --size <cols>x<rows>` or `AM_BOARD_SIZE`.
 
 **An agent asks something Friday could have answered.** Make sure Friday's project brief is
 current: tell Friday what you care about and ask it to update the brief. The task manager
 answers from what is written down.
 
 **A Codex agent refused the model name.** Codex has its own names. Set them with
-`swarm.codexAgentModel` (or `--codex-agent-model`), not `agentModel`.
+`model.codex-agents` (or `--codex-agent-model`), not `model.agents`.
 
 **A profile shows "not signed in".** Run `am run <profile>` and sign in with `/login`
 (Claude Code) or let `codex login` run (Codex).
@@ -465,8 +483,8 @@ answers from what is written down.
 **Everything bills per token.** `am doctor`; an API key variable is set in your shell.
 
 **The claude-hud line does not show under Friday.** Install claude-hud into the profile you
-started Friday on (or into your default `~/.claude`); `am` looks in both. `swarm.hud` must
+started Friday on (or into your default `~/.claude`); `am` looks in both. `gm.hud` must
 be true.
 
-**An agent seems stuck.** After `stallAfterMin` minutes without activity the board marks it
-stalled and tells Friday. You can `x` to stop it, `m` to reassign, or let Friday nudge it.
+**An agent seems stuck.** After `agent.stall-after` minutes without activity the board marks it
+stalled and tells Friday. You can `x` to stop it, `m` to assign it to another agent, or let Friday nudge it.

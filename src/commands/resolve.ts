@@ -65,7 +65,7 @@ export async function resolveActiveProfile(opts: ResolveOptions): Promise<Profil
     console.error(
       opts.provider
         ? `${red('✗')} No profiles registered for ${getProvider(opts.provider).displayName}. ` +
-            `Run ${cyan('am add')}.`
+            `Run ${cyan('am profile add')}.`
         : `${red('✗')} No profiles registered. Run ${cyan('am init')}.`,
     );
     process.exitCode = 1;
@@ -83,7 +83,7 @@ export async function resolveActiveProfile(opts: ResolveOptions): Promise<Profil
   if (actives.length === 0) {
     console.error(
       `${red('✗')} No active profile yet — name one: ${cyan(`${opts.command} <profile>`)}` +
-        `${dim(', or set one with')} ${cyan('am use <profile>')}`,
+        `${dim(', or set one with')} ${cyan('am profile use <profile>')}`,
     );
     process.exitCode = 1;
     return undefined;

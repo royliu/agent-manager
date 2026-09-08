@@ -9,11 +9,11 @@ import { initCommand } from './commands/init.js';
 import { listCommand } from './commands/list.js';
 import { removeCommand } from './commands/remove.js';
 import { runCommand } from './commands/run.js';
-import { shellInitCommand } from './commands/shell.js';
+import { shellHookCommand } from './commands/shell.js';
 import { statusCommand } from './commands/status.js';
 import { envCommand, useCommand, whichCommand } from './commands/use.js';
 import { startCommand } from './commands/start.js';
-import { gmCommand, gmListCommand } from './commands/gm.js';
+import { gmCommand, gmListCommand, gmRemoveCommand, gmShowCommand } from './commands/gm.js';
 import { stopCommand } from './commands/stop.js';
 import { tasksCommand } from './commands/tasks.js';
 import { taskCommand } from './commands/task.js';
@@ -38,41 +38,32 @@ function parseProvider(value: string | undefined): ProviderId | undefined {
   return parsed.data;
 }
 
+/** Old names keep working for a release; say once, on stderr, what the new name is. */
+function renamed(oldName: string, newName: string): void {
+  if (process.stderr.isTTY) console.error(dim(`  (${oldName} is now ${newName})`));
+}
+
 const program = new Command();
 
 program
   .name('am')
   .description(
-    'Run multiple Claude Code / Codex / agent subscriptions on one machine.\n' +
-      'Isolated profiles, guided setup, and live usage in one place.',
+    'agent-manager: several Claude Code / Codex subscriptions on one machine, and a team of agents per project.\n\n' +
+      '  Words: a profile is one account of one tool. A GM is the General Manager you talk to in a project\n' +
+      '  folder; its name stands for its whole team. The board is where you watch tasks and agents.\n' +
+      '  Verbs: start/stop for work that runs in the background (a GM, a task) · open for a conversation ·\n' +
+      '  run for a tool in the foreground · use for a switch that stays · ls/add/rm/show on any collection.\n' +
+      '  Shortcuts: am (= am status) · am run (= am profile run) · am gm (= am gm open) · am board.',
   )
   .version(VERSION)
-  .enablePositionalOptions();
+  .enablePositionalOptions()
+  .addHelpText('after', '\nFull guide: docs/GUIDE.md in the repository.');
 
-program
-  .command('init')
-  .description('detect installed tools and register accounts you are already signed into')
-  .option('-y, --yes', 'skip confirmation')
-  .action(async (opts) => {
-    await initCommand(opts);
-  });
-
-program
-  .command('add')
-  .description('create a new isolated profile and walk you through signing in')
-  .argument('[name]', 'profile name, e.g. work')
-  .option('-p, --provider <provider>', 'claude-code | codex | claude-desktop | gemini | cursor')
-  .option('-l, --label <label>', 'human note, e.g. "Work — Max 20x"')
-  .option('--home <dir>', 'use a specific config directory instead of the managed one')
-  .option('-y, --yes', 'accept defaults, never prompt')
-  .action(async (name, opts) => {
-    await addCommand(name, opts);
-  });
-
+// ------------------------------------------------------------ home and setup
 program
   .command('status', { isDefault: true })
   .alias('st')
-  .description('show plan, quota and consumption for every profile')
+  .description('home screen: every profile with plan, quota and 24h use; every GM and what needs you')
   .option('-w, --watch', 'live dashboard')
   .option('-i, --interval <seconds>', 'refresh interval for --watch', '10')
   .option('-p, --provider <provider>', 'limit to one tool')
@@ -89,65 +80,52 @@ program
   });
 
 program
-  .command('list')
-  .alias('ls')
-  .description('list registered profiles')
+  .command('init')
+  .description('first-run setup: register the accounts you are already signed into, install the shell hook')
+  .option('-y, --yes', 'accept the defaults, never prompt')
+  .action(async (opts) => {
+    await initCommand(opts);
+  });
+
+program
+  .command('doctor')
+  .description('check installs, logins, isolation, the shell hook, and billing-override variables')
+  .action(async () => {
+    await doctorCommand();
+  });
+
+// ------------------------------------------------------------------ profiles
+const profile = program
+  .command('profile')
+  .description('your accounts: am profile ls | add [name] | rm <name> | use <name> | run <name> [-- args]')
+  .action(() => {
+    listCommand({});
+  });
+
+profile
+  .command('ls')
+  .alias('list')
+  .description('list profiles; the active one is marked')
   .option('--json', 'machine-readable output')
   .action((opts) => {
     listCommand(opts);
   });
 
-program
-  .command('use')
-  .description('make a profile the active one')
-  .argument('<name>')
-  .option('-p, --provider <provider>')
+profile
+  .command('add')
+  .description('create a new isolated profile and walk you through signing in')
+  .argument('[name]', 'profile name, e.g. work')
+  .option('-p, --provider <provider>', 'claude-code | codex | claude-desktop | gemini | cursor')
+  .option('-l, --label <label>', 'human note, e.g. "Work — Max 20x"')
+  .option('--home <dir>', 'use a specific config directory instead of the managed one')
+  .option('-y, --yes', 'accept defaults, never prompt')
   .action(async (name, opts) => {
-    await useCommand(name, { provider: parseProvider(opts.provider) });
+    await addCommand(name, opts);
   });
 
-program
-  .command('env')
-  .description('print shell exports for a profile (used by the shell hook)')
-  .argument('<name>')
-  .option('-p, --provider <provider>')
-  .action((name, opts) => {
-    envCommand(name, { provider: parseProvider(opts.provider) });
-  });
-
-program
-  .command('run')
-  .description('launch a tool under a profile; everything after the name is passed through')
-  .argument('[name]', 'profile name (defaults to the active profile)')
-  .argument('[args...]', 'arguments forwarded to the tool')
-  .option('-p, --provider <provider>')
-  .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
-  .passThroughOptions()
-  .allowUnknownOption()
-  .action(async (name, args: string[], opts) => {
-    await runCommand(name, args ?? [], {
-      provider: parseProvider(opts.provider),
-      keepApiKeys: opts.keepApiKeys,
-    });
-  });
-
-program
-  .command('which')
-  .description('show which profile is active for each tool')
-  .action(() => {
-    whichCommand();
-  });
-
-program
-  .command('doctor')
-  .description('check installs, logins, isolation, and billing-override variables')
-  .action(async () => {
-    await doctorCommand();
-  });
-
-program
-  .command('remove')
-  .alias('rm')
+profile
+  .command('rm')
+  .alias('remove')
   .description('unregister a profile (its data is kept unless you pass --purge)')
   .argument('<name>')
   .option('-p, --provider <provider>')
@@ -157,40 +135,116 @@ program
     await removeCommand(name, { ...opts, provider: parseProvider(opts.provider) });
   });
 
-// ---------------------------------------------------------------- swarm
-program
-  .command('start')
-  .description('start a General Manager in this folder: am start <profile> gm [name]')
-  .argument('<profile>', 'a Claude Code or Codex profile, e.g. personal')
-  .argument('<kind>', 'gm')
-  .argument('[name]', 'a name for the General Manager, e.g. friday (defaults to the folder name)')
-  .option('--agents <n>', 'number of task agents to create (default from swarm.agents)')
-  .option('--gm-model <model>', "the General Manager's model for this GM (default: the profile's model; \"default\" clears)")
-  .option('--tm-model <model>', "the task manager's model for this GM (default: the profile's model)")
-  .option('--agent-model <model>', "the task agents' model for this GM (default: each agent's profile model)")
-  .option('--codex-agent-model <model>', 'the model for task agents on Codex profiles (default: the profile model)')
-  .option('--dir <path>', 'workspace folder (default: current folder)')
-  .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
-  .option('--dry-run', 'set everything up and print the command instead of starting the session')
-  .action(async (profile, kind, name, opts) => {
-    await startCommand(profile, kind, name, opts);
-  });
-
-program
-  .command('gm')
-  .description('come back to the General Manager in this folder (am gm ls lists them all)')
-  .argument('[name]', 'GM name, or "ls"')
-  .option('--json', 'machine-readable output for ls')
+profile
+  .command('use')
+  .description('switch this shell to a profile (needs the shell hook: am init, or am shell hook)')
+  .argument('<name>')
+  .option('-p, --provider <provider>')
   .action(async (name, opts) => {
-    if (name === 'ls' || name === 'list') gmListCommand(opts);
-    else await gmCommand(name);
+    await useCommand(name, { provider: parseProvider(opts.provider) });
+  });
+
+profile
+  .command('run')
+  .description('open the tool on a profile, in the foreground; everything after the name is passed through')
+  .argument('[name]', 'profile name (defaults to the active profile)')
+  .argument('[args...]', 'arguments forwarded to the tool')
+  .option('-p, --provider <provider>')
+  .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
+  .passThroughOptions()
+  .allowUnknownOption()
+  .action(async (name, args: string[], opts) => {
+    await runCommand(name, args ?? [], { provider: parseProvider(opts.provider), keepApiKeys: opts.keepApiKeys });
   });
 
 program
-  .command('tasks')
-  .alias('tm')
-  .alias('board')
-  .description('the board: every task and every agent, live')
+  .command('run')
+  .description('open the tool on a profile (short for am profile run): am run work [-- args]')
+  .argument('[name]', 'profile name (defaults to the active profile)')
+  .argument('[args...]', 'arguments forwarded to the tool')
+  .option('-p, --provider <provider>')
+  .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
+  .passThroughOptions()
+  .allowUnknownOption()
+  .action(async (name, args: string[], opts) => {
+    await runCommand(name, args ?? [], { provider: parseProvider(opts.provider), keepApiKeys: opts.keepApiKeys });
+  });
+
+// ------------------------------------------------------------------------ gm
+const gm = program
+  .command('gm')
+  .description('the General Manager of this folder: am gm [name] opens the conversation · start | stop | ls | show | rm')
+  .argument('[name]', 'GM name (defaults to the one for this folder)')
+  .action(async (name) => {
+    await gmCommand(name);
+  });
+
+gm
+  .command('start')
+  .description('start a GM here on a profile and open the conversation: am gm start <profile> [name]')
+  .argument('<profile>', 'a Claude Code or Codex profile, e.g. personal')
+  .argument('[name]', 'a name for the GM, e.g. friday (defaults to the folder name)')
+  .option('--agents <n>', 'task agents to create (default: team.size)')
+  .option('--gm-model <model>', "the GM's model for this GM only (default: the profile's model; \"default\" clears)")
+  .option('--tm-model <model>', "the task manager's model for this GM only")
+  .option('--agent-model <model>', "the task agents' model for this GM only")
+  .option('--codex-agent-model <model>', 'the model for task agents on Codex profiles')
+  .option('--dir <path>', 'workspace folder (default: current folder)')
+  .option('--no-open', 'start the team in the background without opening the conversation')
+  .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
+  .option('--dry-run', 'set everything up and print the command instead of opening the session')
+  .action(async (profileName, name, opts) => {
+    await startCommand(profileName, name, opts);
+  });
+
+gm
+  .command('open')
+  .description("open the GM's conversation where you left it")
+  .argument('[name]')
+  .action(async (name) => {
+    await gmCommand(name);
+  });
+
+gm
+  .command('stop')
+  .description("stop the GM's team and task manager; the board is kept")
+  .argument('[name]')
+  .action(async (name) => {
+    await stopCommand(name);
+  });
+
+gm
+  .command('ls')
+  .alias('list')
+  .description('every GM: profile, running or stopped, folder')
+  .option('--json', 'machine-readable output')
+  .action((opts) => {
+    gmListCommand(opts);
+  });
+
+gm
+  .command('show')
+  .description('one GM in full: models, team, workspace, what needs you')
+  .argument('[name]')
+  .option('--json', 'machine-readable output')
+  .action(async (name, opts) => {
+    await gmShowCommand(name, opts);
+  });
+
+gm
+  .command('rm')
+  .alias('remove')
+  .description("forget a stopped GM: its tasks, notes, runs and team are deleted; the project folder is untouched")
+  .argument('<name>')
+  .option('-y, --yes', 'skip confirmation')
+  .action(async (name, opts) => {
+    await gmRemoveCommand(name, opts);
+  });
+
+// ---------------------------------------------------------- board and tasks
+program
+  .command('board')
+  .description('the board: every task and every agent, live (kanban when wide, a list when narrow)')
   .argument('[name]', 'GM name (defaults to the one for this folder)')
   .option('-g, --group <by>', 'status | agent | eta', 'status')
   .option('--json', 'print the board as JSON')
@@ -201,56 +255,100 @@ program
 
 program
   .command('task')
-  .description('act on a task from the shell: show|add|eta|note|answer|approve|reject|cancel|retry|reassign|dispatch #id …')
+  .description('one task, from the shell: ls | show | add | note | eta | answer | approve | reject | stop | start | assign | cancel | retry  #id …')
   .argument('<action>')
   .argument('[args...]')
-  .option('--swarm <name>', 'GM name (defaults to the one for this folder)')
-  .option('--agent <name>', 'agent for add/dispatch/reassign')
+  .option('--gm <name>', 'GM name (defaults to the one for this folder)')
+  .option('--agent <name>', 'agent for add / start / assign')
   .option('--description <text>', 'description for add')
-  .option('--dispatch', 'start right away (add)')
   .option('--eta <when>', 'when it should be done, e.g. 2h, 1d, or a date and time (add)')
+  .option('--start', 'start it right away (add)')
   .option('--json', 'machine-readable output')
+  .option('--swarm <name>', 'old name of --gm')
+  .option('--dispatch', 'old name of --start')
   .action(async (action, args: string[], opts) => {
-    await taskCommand(action, args ?? [], opts);
+    await taskCommand(action, args ?? [], { ...opts, gm: opts.gm ?? opts.swarm, start: opts.start ?? opts.dispatch });
   });
 
 program
   .command('agent')
-  .description('the team: ls | add [name] | rm <name> | move <name> --profile <p>')
+  .description('the task agents: ls | add [name] [--profile <p>] [--model <m>] | rm <name> | move <name> --profile <p>')
   .argument('<action>')
   .argument('[name]')
-  .option('--swarm <name>', 'GM name (defaults to the one for this folder)')
-  .option('--profile <name>', 'profile for add/move')
+  .option('--gm <name>', 'GM name (defaults to the one for this folder)')
+  .option('--profile <name>', 'profile for add / move')
   .option('--model <id>', 'model for add')
   .option('--json', 'machine-readable output')
+  .option('--swarm <name>', 'old name of --gm')
   .action(async (action, name, opts) => {
-    await agentCommand(action, name, opts);
-  });
-
-program
-  .command('stop')
-  .description('stop the General Manager\'s team and task manager; the board is kept')
-  .argument('[name]')
-  .action(async (name) => {
-    await stopCommand(name);
+    await agentCommand(action, name, { ...opts, gm: opts.gm ?? opts.swarm });
   });
 
 program
   .command('config')
-  .description('swarm settings for every GM: am config swarm.<key> [value]  ("default" clears; models: gmModel tmModel agentModel)')
-  .argument('[key]')
+  .description('settings for every GM: am config lists them · am config <group.key> <value> sets one · "default" clears')
+  .argument('[key]', 'e.g. model.tm, team.size, gm.propose, tm.answers, agent.compact-at, limits.budget-usd')
   .argument('[value]')
   .action(async (key, value) => {
     await configCommand(key, value);
   });
 
-program
-  .command('tm-serve', { hidden: true })
-  .requiredOption('--swarm <name>')
-  .action((opts) => {
-    serveCommand(opts.swarm);
+// -------------------------------------------------------------------- shell
+const shell = program
+  .command('shell')
+  .description('shell integration: am shell hook [zsh|bash|fish] prints the hook · am shell env <profile> prints its exports')
+  .action(() => {
+    shell.help();
   });
 
+shell
+  .command('hook')
+  .description('print the hook that lets "am profile use" change the current shell')
+  .argument('[shell]', 'zsh | bash | fish (auto-detected by default)')
+  .action((sh) => {
+    shellHookCommand(sh);
+  });
+
+shell
+  .command('env')
+  .description('print the exports for a profile (what the hook evaluates)')
+  .argument('<name>')
+  .option('-p, --provider <provider>')
+  .action((name, opts) => {
+    envCommand(name, { provider: parseProvider(opts.provider) });
+  });
+
+// --------------------------------------------------------- hidden plumbing
+program
+  .command('_serve', { hidden: true })
+  .option('--gm <name>')
+  .option('--swarm <name>')
+  .action((opts) => {
+    serveCommand(opts.gm ?? opts.swarm);
+  });
+
+program
+  .command('_bridge', { hidden: true })
+  .option('--gm <name>')
+  .option('--swarm <name>')
+  .requiredOption('--role <role>')
+  .option('--agent <name>')
+  .option('--task <id>')
+  .action(async (opts) => {
+    await runMcpBridge({ swarm: opts.gm ?? opts.swarm, role: opts.role === 'gm' ? 'gm' : 'agent', agent: opts.agent, task: opts.task ? Number.parseInt(opts.task, 10) : undefined });
+  });
+
+program
+  .command('_hook', { hidden: true })
+  .argument('<kind>')
+  .option('--gm <name>')
+  .option('--swarm <name>')
+  .action(async (kind, opts) => {
+    await hookCommand(kind as 'inbox' | 'stop' | 'status', opts.gm ?? opts.swarm);
+  });
+
+// Old plumbing names, still spawned by task managers and GM sessions started before 0.7.0.
+program.command('tm-serve', { hidden: true }).requiredOption('--swarm <name>').action((opts) => serveCommand(opts.swarm));
 program
   .command('mcp', { hidden: true })
   .requiredOption('--swarm <name>')
@@ -260,7 +358,6 @@ program
   .action(async (opts) => {
     await runMcpBridge({ swarm: opts.swarm, role: opts.role === 'gm' ? 'gm' : 'agent', agent: opts.agent, task: opts.task ? Number.parseInt(opts.task, 10) : undefined });
   });
-
 program
   .command('tm-hook', { hidden: true })
   .argument('<kind>')
@@ -269,17 +366,105 @@ program
     await hookCommand(kind as 'inbox' | 'stop' | 'status', opts.swarm);
   });
 
+// ------------------------------------------- old names, kept for one release
 program
-  .command('shell-init')
-  .description('print the shell hook that makes `am use` affect the current shell')
-  .argument('[shell]', 'zsh | bash | fish (auto-detected by default)')
-  .action((shell) => {
-    shellInitCommand(shell);
+  .command('ls', { hidden: true })
+  .alias('list')
+  .option('--json')
+  .action((opts) => {
+    renamed('am ls', 'am profile ls');
+    listCommand(opts);
+  });
+program
+  .command('add', { hidden: true })
+  .argument('[name]')
+  .option('-p, --provider <provider>')
+  .option('-l, --label <label>')
+  .option('--home <dir>')
+  .option('-y, --yes')
+  .action(async (name, opts) => {
+    renamed('am add', 'am profile add');
+    await addCommand(name, opts);
+  });
+program
+  .command('rm', { hidden: true })
+  .alias('remove')
+  .argument('<name>')
+  .option('-p, --provider <provider>')
+  .option('--purge')
+  .option('-y, --yes')
+  .action(async (name, opts) => {
+    renamed('am rm', 'am profile rm');
+    await removeCommand(name, { ...opts, provider: parseProvider(opts.provider) });
+  });
+program
+  .command('use', { hidden: true })
+  .argument('<name>')
+  .option('-p, --provider <provider>')
+  .action(async (name, opts) => {
+    renamed('am use', 'am profile use');
+    await useCommand(name, { provider: parseProvider(opts.provider) });
+  });
+program
+  .command('which', { hidden: true })
+  .action(() => {
+    renamed('am which', 'am status');
+    whichCommand();
+  });
+program
+  .command('env', { hidden: true })
+  .argument('<name>')
+  .option('-p, --provider <provider>')
+  .action((name, opts) => {
+    // No hint: the output is evaluated by the shell hook.
+    envCommand(name, { provider: parseProvider(opts.provider) });
+  });
+program
+  .command('shell-init', { hidden: true })
+  .argument('[shell]')
+  .action((sh) => {
+    renamed('am shell-init', 'am shell hook');
+    shellHookCommand(sh);
+  });
+program
+  .command('start', { hidden: true })
+  .argument('<profile>')
+  .argument('[kind]')
+  .argument('[name]')
+  .option('--agents <n>')
+  .option('--gm-model <model>')
+  .option('--tm-model <model>')
+  .option('--agent-model <model>')
+  .option('--codex-agent-model <model>')
+  .option('--dir <path>')
+  .option('--keep-api-keys')
+  .option('--dry-run')
+  .action(async (profileName, kind, name, opts) => {
+    renamed('am start', 'am gm start');
+    await startCommand(profileName, kind === 'gm' ? name : kind, opts);
+  });
+program
+  .command('stop', { hidden: true })
+  .argument('[name]')
+  .action(async (name) => {
+    renamed('am stop', 'am gm stop');
+    await stopCommand(name);
+  });
+program
+  .command('tasks', { hidden: true })
+  .alias('tm')
+  .argument('[name]')
+  .option('-g, --group <by>', '', 'status')
+  .option('--json')
+  .option('--size <cols>x<rows>')
+  .action(async (name, opts) => {
+    renamed('am tasks', 'am board');
+    await tasksCommand(name, opts);
   });
 
 /**
  * Announce a one-time rename on stderr, so JSON on stdout and the shell hook's
- * `am env` output stay clean.
+ * `am shell env` output stay clean.
  */
 function reportMigration(): void {
   const renames = migrateProfileNames();

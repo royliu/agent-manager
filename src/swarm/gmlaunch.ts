@@ -17,12 +17,12 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
   const prompt = gmSystemPrompt(meta, store.team(), store.workspace(), cfg, models);
   const node = process.execPath;
   const cli = amEntry();
-  const bridge = { command: node, args: [cli, 'mcp', '--swarm', meta.name, '--role', 'gm'] };
+  const bridge = { command: node, args: [cli, '_bridge', '--gm', meta.name, '--role', 'gm'] };
   writeJsonAtomic(store.paths.mcpConfig, { mcpServers: { swarm: bridge } });
   const provider = getProvider(profile.provider);
 
   if (profile.provider === 'claude-code') {
-    const hook = (kind: string) => `"${node}" "${cli}" tm-hook ${kind} --swarm ${meta.name}`;
+    const hook = (kind: string) => `"${node}" "${cli}" _hook ${kind} --gm ${meta.name}`;
     writeJsonAtomic(store.paths.gmSettings, {
       hooks: {
         UserPromptSubmit: [{ hooks: [{ type: 'command', command: hook('inbox'), timeout: 10 }] }],
@@ -40,10 +40,10 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
       sessionId = randomUUID();
       args.push('--session-id', sessionId);
       // A fresh GM greets the owner first, so the session opens like a conversation, not a blank prompt.
-      args.push(`Say hello in one short paragraph: who you are, that your team and task manager are ready in this folder, and that the board is "am tasks" in another terminal. Then ask what the owner wants to get done. Do not create any task yet.`);
+      args.push(`Say hello in one short paragraph: who you are, that your team and task manager are ready in this folder, and that the board is "am board" in another terminal. Then ask what the owner wants to get done. Do not create any task yet.`);
     }
     const spec = provider.launch(profile.home, args);
-    spec.env.AM_SWARM = meta.name;
+    spec.env.AM_GM = meta.name;
     return { spec, sessionId };
   }
 
@@ -57,6 +57,6 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
   if (opts.resume && meta.gmSessionId) args.push('resume', meta.gmSessionId);
   else args.push(`${prompt}\n\nAt the start of every turn, read your inbox (inbox_read) before anything else. Introduce yourself to the owner in one short paragraph and ask what they want to get done.`);
   const spec = provider.launch(profile.home, args);
-  spec.env.AM_SWARM = meta.name;
+  spec.env.AM_GM = meta.name;
   return { spec };
 }

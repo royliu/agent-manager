@@ -19,7 +19,7 @@ function baseStatusLine(profileHome: string): { command: string; configDir: stri
   for (const dir of dirs) {
     try {
       const st = (JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')) as { statusLine?: { type?: string; command?: string } }).statusLine;
-      if (st?.type === 'command' && st.command && !st.command.includes('tm-hook')) return { command: st.command, configDir: dir };
+      if (st?.type === 'command' && st.command && !/tm-hook|_hook/.test(st.command)) return { command: st.command, configDir: dir };
     } catch {
       /* no settings here */
     }

@@ -11,10 +11,10 @@ function parseId(s: string | undefined): number {
   return n;
 }
 
-/** `am task <show|add|note|answer|approve|reject|cancel|retry|reassign|dispatch> …` */
-export async function taskCommand(sub: string, args: string[], opts: { swarm?: string; json?: boolean; agent?: string; description?: string; dispatch?: boolean; eta?: string }): Promise<void> {
-  const meta = resolveSwarmName(opts.swarm);
-  if (!meta) return noSwarm(opts.swarm);
+/** `am task <ls|show|add|note|eta|answer|approve|reject|stop|start|assign|cancel|retry> …` */
+export async function taskCommand(sub: string, args: string[], opts: { gm?: string; json?: boolean; agent?: string; description?: string; start?: boolean; eta?: string }): Promise<void> {
+  const meta = resolveSwarmName(opts.gm);
+  if (!meta) return noSwarm(opts.gm);
   const gm = meta.name;
   await withClient(meta.name, async (c) => {
     const text = (from: number) => args.slice(from).join(' ').trim();
@@ -47,7 +47,7 @@ export async function taskCommand(sub: string, args: string[], opts: { swarm?: s
         return;
       }
       case 'add': {
-        const t = await c.call<Task>('task.create', { title: text(0), description: opts.description ?? text(0), by: 'you', agent: opts.agent, dispatch: opts.dispatch === true, eta: opts.eta });
+        const t = await c.call<Task>('task.create', { title: text(0), description: opts.description ?? text(0), by: 'you', agent: opts.agent, dispatch: opts.start === true, eta: opts.eta });
         console.log(`  ${green('✓')} #${t.id} ${t.title} ${dim(`(${statusLabel(t, gm)})`)}`);
         return;
       }
@@ -58,10 +58,12 @@ export async function taskCommand(sub: string, args: string[], opts: { swarm?: s
       case 'reject': case 'stop': { const t = await c.call<Task>('task.reject', { id: parseId(args[0]), feedback: text(1), by: 'you' }); return ok(`#${t.id} → ${statusLabel(t, gm)}${text(1) ? '' : ' (on hold)'}`); }
       case 'cancel': { const t = await c.call<Task>('task.cancel', { id: parseId(args[0]), by: 'you' }); return ok(`#${t.id} cancelled`); }
       case 'retry': { const t = await c.call<Task>('task.retry', { id: parseId(args[0]) }); return ok(`#${t.id} → ${statusLabel(t, gm)}`); }
+      case 'start':
       case 'dispatch': { const t = await c.call<Task>('task.dispatch', { id: parseId(args[0]), agent: opts.agent, by: 'you' }); return ok(`#${t.id} → ${statusLabel(t, gm)}`); }
+      case 'assign':
       case 'reassign': { const t = await c.call<Task>('task.reassign', { id: parseId(args[0]), agent: args[1] ?? opts.agent, by: 'you' }); return ok(`#${t.id} → ${t.agent}`); }
       default:
-        console.error(`${red('✗')} Unknown: am task ${sub}. Try ${cyan('am task show|add|note|answer|approve|reject|cancel|retry|reassign|dispatch #id …')}`);
+        console.error(`${red('✗')} Unknown: am task ${sub}. Try ${cyan('am task ls|show|add|note|eta|answer|approve|reject|stop|start|assign|cancel|retry #id …')}`);
         process.exitCode = 1;
     }
   });
