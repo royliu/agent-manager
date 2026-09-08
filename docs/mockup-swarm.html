@@ -1,0 +1,1015 @@
+<title>am swarm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --ink:#17202A; --ink-2:#48535F; --ink-3:#7A8592;
+  --line:#D4DAE1; --line-2:#E4E8EC; --accent:#157F93; --accent-ink:#0E5F6E; --accent-soft:#DBEDF0;
+  --code-bg:#E5EAEE; --warn:#9A6A00; --warn-soft:#F6ECCF; --band:#E4E9EE;
+  --t-bg:#0B1015; --t-chrome:#131A21; --t-fg:#D3DBE3; --t-dim:#6A7682; --t-cyan:#5BC8DC; --t-yellow:#E6B54B;
+  --t-magenta:#DA8FC7; --t-green:#7DCB8C; --t-red:#E8776C; --t-blue:#8AACF2; --t-hl:#1C3A45; --t-rule:#28323D; --t-inv-bg:#D3DBE3; --t-inv-fg:#0B1015;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1318; --surface:#151B22; --ink:#DCE3EA; --ink-2:#A6B0BB; --ink-3:#717D8A;
+    --line:#27313B; --line-2:#1E272F; --accent:#4FC1D6; --accent-ink:#7FD6E6; --accent-soft:#11343B;
+    --code-bg:#1A222B; --warn:#E3B55A; --warn-soft:#2E2610; --band:#131920;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1318; --surface:#151B22; --ink:#DCE3EA; --ink-2:#A6B0BB; --ink-3:#717D8A;
+  --line:#27313B; --line-2:#1E272F; --accent:#4FC1D6; --accent-ink:#7FD6E6; --accent-soft:#11343B;
+  --code-bg:#1A222B; --warn:#E3B55A; --warn-soft:#2E2610; --band:#131920;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15.5px/1.6 "IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+code,kbd,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+code{font-size:.88em;background:var(--code-bg);padding:.08em .35em;border-radius:3px}
+kbd{font-size:.82em;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:.05em .4em;background:var(--surface);color:var(--ink)}
+h1,h2,h3{font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif;text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(38px,5vw,56px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:28px;font-weight:600;margin:0 0 6px}
+h3{font-size:18px;font-weight:600;font-family:"IBM Plex Sans",sans-serif;margin:28px 0 8px}
+p{margin:0 0 14px}
+.eyebrow{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+.page{max-width:1180px;margin:0 auto;padding:0 28px 96px}
+.prose{max-width:68ch}
+.prose ul,.prose ol{padding-left:22px;margin:0 0 14px}
+.prose li{margin:0 0 6px}
+.muted{color:var(--ink-2)}
+.small{font-size:13.5px}
+.mast{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+.mast .eyebrow{margin-bottom:14px;display:block}
+.mast .dek{font-size:20px;line-height:1.45;color:var(--ink-2);max-width:62ch;margin:18px 0 0}
+.see{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 40px;margin:36px 0 0}
+.see .col > .lab{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line-2)}
+.see .col.you > .lab{color:var(--accent-ink);border-top:2px solid var(--accent)}
+.see .role{padding:16px 0 12px;border-bottom:1px solid var(--line-2)}
+.see .role .name{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:19px}
+.see .role p{margin:4px 0 8px;font-size:14.5px;color:var(--ink-2)}
+.see .role code{font-size:13px}
+.see .col.under .role .name{color:var(--ink-2)}
+@media (max-width:760px){.see{grid-template-columns:1fr}}
+nav.toc{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin:0 -28px;padding:0 28px}
+nav.toc ul{list-style:none;margin:0;padding:0;display:flex;gap:22px;overflow-x:auto;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.03em;text-transform:uppercase}
+nav.toc a{display:block;padding:12px 0;color:var(--ink-2);white-space:nowrap;border-bottom:2px solid transparent}
+nav.toc a:hover{color:var(--ink);border-bottom-color:var(--accent)}
+section{padding:56px 0 8px;border-bottom:1px solid var(--line-2)}
+section:last-of-type{border-bottom:0}
+.sechead{display:flex;flex-direction:column;gap:6px;margin-bottom:22px}
+.sechead p{color:var(--ink-2);max-width:72ch;margin:0}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:0 0 18px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px 9px 0;border-bottom:1px solid var(--line-2)}
+th{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--line)}
+td:first-child{white-space:nowrap}
+.tablewrap{overflow-x:auto}
+.termwrap{margin:8px 0 10px}
+.term{background:var(--t-bg);color:var(--t-fg);border-radius:8px;border:1px solid #1F2933;overflow:hidden;box-shadow:0 18px 50px -24px rgba(0,0,0,.55)}
+.term .chrome{display:flex;align-items:center;gap:10px;background:var(--t-chrome);padding:8px 12px;font:500 12px/1 "IBM Plex Mono",monospace;color:#7F8B97;border-bottom:1px solid #1F2933}
+.term .dots{display:inline-flex;gap:6px}
+.term .dots i{width:10px;height:10px;border-radius:50%;background:#2B3641;display:inline-block}
+.term .chrome .spacer{flex:1}
+.term .chrome .focus{color:var(--t-cyan);opacity:0;transition:opacity .15s}
+.term.is-focused .chrome .focus{opacity:1}
+.term pre{margin:0;padding:12px 14px 14px;font:400 11.5px/1.45 "IBM Plex Mono",ui-monospace,monospace;overflow-x:auto;white-space:pre;tab-size:4}
+.term.live{outline:none;cursor:text}
+.term.live pre{font-size:clamp(9.2px,.94vw,12px);line-height:1.42}
+.term.live:focus-visible{box-shadow:0 0 0 2px var(--accent),0 18px 50px -24px rgba(0,0,0,.55)}
+.c-dim{color:var(--t-dim)} .c-cyan{color:var(--t-cyan)} .c-yellow{color:var(--t-yellow)} .c-magenta{color:var(--t-magenta)}
+.c-green{color:var(--t-green)} .c-red{color:var(--t-red)} .c-blue{color:var(--t-blue)} .c-bold{font-weight:600;color:#F2F6F9}
+.c-rule{color:var(--t-rule)} .hl{background:var(--t-hl)} .inv{background:var(--t-inv-bg);color:var(--t-inv-fg);font-weight:600}
+.hl .c-dim{color:#9AA6B2}
+.keys{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 6px;font-size:13px;color:var(--ink-2)}
+.keys button{font:500 12.5px/1 "IBM Plex Mono",monospace;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:6px 9px;cursor:pointer}
+.keys button:hover{border-color:var(--accent)}
+.keys button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.keys .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+.keys .lbl{font-size:12px;color:var(--ink-3);margin-right:2px}
+.keys .reset{margin-left:auto;color:var(--ink-2);background:transparent;border-style:dashed}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 28px;margin:18px 0 0;font-size:14px;color:var(--ink-2)}
+.legend b{color:var(--ink);font-weight:600}
+.legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:-1px}
+figure{margin:22px 0 26px}
+figcaption{font-size:13.5px;color:var(--ink-2);margin:10px 0 0;max-width:84ch}
+figure svg{max-width:100%;height:auto;display:block;color:var(--ink)}
+svg text{font-family:"IBM Plex Sans",sans-serif;font-size:12px;fill:currentColor}
+svg .mono{font-family:"IBM Plex Mono",monospace;font-size:11px}
+svg .lbl{font-size:11px;fill:var(--ink-2)}
+svg .box{fill:var(--surface);stroke:currentColor;stroke-width:1}
+svg .soft{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1}
+svg .band{fill:var(--band);stroke:none}
+svg .dark{fill:#0B1015;stroke:#2A3440}
+svg text.on-dark{fill:#D3DBE3}
+svg text.dim-dark{fill:#9AA6B2}
+svg .edge{stroke:currentColor;stroke-width:1.2;fill:none}
+svg .edge.dash{stroke-dasharray:4 3}
+svg .edge.accent{stroke:var(--accent);stroke-width:1.6}
+svg .head{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.06em}
+.twoup{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px}
+@media (max-width:860px){.twoup{grid-template-columns:1fr}}
+.callout{border-left:3px solid var(--accent);padding:10px 16px;background:color-mix(in srgb,var(--accent-soft) 55%,transparent);margin:14px 0 22px;max-width:78ch;font-size:14.5px}
+.decision{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:8px 26px;font-size:14.5px;border-top:1px solid var(--line);margin-top:6px}
+.decision > div{padding:12px 0;border-bottom:1px solid var(--line-2)}
+.decision .k{font-weight:600}
+.decision .k small{display:block;font-weight:400;color:var(--ink-3);font-size:12.5px;margin-top:2px}
+@media (max-width:700px){.decision{grid-template-columns:1fr}.decision .k{padding-bottom:0;border-bottom:0}}
+pre.code{background:var(--code-bg);border-radius:6px;padding:14px 16px;font-size:12.5px;line-height:1.5;overflow-x:auto;margin:0 0 18px;color:var(--ink)}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0 0 18px;max-width:78ch}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:34px minmax(0,1fr);gap:0 12px;padding:10px 0;border-bottom:1px solid var(--line-2);font-size:14.5px}
+ol.steps li::before{content:counter(s);font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;color:var(--accent-ink);font-size:16px;line-height:1.4}
+ol.steps b{font-weight:600}
+.badge{display:inline-block;font:600 11px/1 "IBM Plex Sans Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:3px;background:var(--accent-soft);color:var(--accent-ink);vertical-align:2px;margin-left:6px}
+.milestones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid var(--line)}
+.milestones > div{padding:16px 18px 16px 0;border-right:1px solid var(--line-2);margin-right:18px;font-size:14px}
+.milestones > div:last-child{border-right:0;margin-right:0}
+.milestones .m{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:22px;color:var(--accent-ink)}
+.milestones .t{font-weight:600;margin:2px 0 8px}
+.milestones .exit{color:var(--ink-2);font-size:13px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+@media (max-width:900px){.milestones{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.milestones{grid-template-columns:1fr}.milestones>div{border-right:0;margin-right:0;border-bottom:1px solid var(--line-2)}}
+.fields{display:grid;grid-template-columns:minmax(0,120px) minmax(0,1fr);gap:6px 20px;font-size:14.5px;max-width:78ch;margin:0 0 18px}
+.fields > .f{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--accent-ink);padding-top:2px}
+.fields > div{padding:8px 0;border-bottom:1px solid var(--line-2)}
+footer{padding:36px 0 0;color:var(--ink-3);font-size:13px}
+.c-frame{color:#3A4652} .c-claude{color:#D97757} .c-white{color:#F2F6F9}
+.term .chrome .cc{color:#D97757}
+</style>
+<div class="page">
+<header class="mast">
+  <span class="eyebrow">agent-manager · PRD and mockup · draft v0.3 · 6 September 2026</span>
+  <h1>am swarm</h1>
+  <p class="dek">Go to a project, start a General Manager on one of your profiles, give it a name. It brings up its own task manager and four task agents. You talk to it and you watch the board.</p>
+  <div class="see">
+    <div class="col you">
+      <div class="lab">What you see</div>
+      <div class="role"><div class="name">Friday, the General Manager</div><p>A Claude Code session on your profile. Interprets, discusses, breaks work into tasks, assigns, reviews. Owns the workspace and the team.</p><code>am start personal gm friday</code></div>
+      <div class="role"><div class="name">The board</div><p>Every task with status, owner, ETA and cost. A team strip with each agent's state and context use. How many things need you.</p><code>am tasks</code></div>
+    </div>
+    <div class="col under">
+      <div class="lab">What runs underneath</div>
+      <div class="role"><div class="name">Task manager</div><p>A board on the surface, an agent underneath. Keeps tasks, notes, questions, runs and the project brief; assigns work to idle agents; watches for stalls and context limits. Answers the team's questions on Friday's behalf, reasoning from your intent, so Friday stays in the conversation with you.</p></div>
+      <div class="role"><div class="name">friday-1 … friday-4</div><p>Persistent agents on the same profile, one task at a time. Report with evidence, ask with context, checkpoint to the board and compact at 90%.</p></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><ul>
+  <li><a href="#start">Start</a></li>
+  <li><a href="#mockup">Board</a></li>
+  <li><a href="#rules">Three rules</a></li>
+  <li><a href="#lifecycle">Tasks</a></li>
+  <li><a href="#keys">Keys</a></li>
+  <li><a href="#decisions">Decisions</a></li>
+  <li><a href="#roadmap">Roadmap</a></li>
+</ul></nav>
+
+<section id="start">
+  <div class="sechead">
+    <span class="eyebrow">Mockup · am start</span>
+    <h2>Starting Friday in a project</h2>
+    <p>One command, from the shell rather than from inside Claude Code: the profile, credentials, tools and status line are chosen when Claude Code launches. <code>am</code> sets up the team, then hands the terminal to Claude Code (or Codex, if that is the profile's tool) running as Friday. It does nothing else. The board is <code>am tasks</code> in another terminal.</p>
+  </div>
+  <figure>
+    <div class="term"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>am start personal gm friday</span><span class="spacer"></span><span class="cc">✻ claude</span><span>· ~/Projects/agent-manager</span></div>
+<pre><span class="c-dim">❯</span> <span class="c-bold">cd ~/Projects/agent-manager</span>
+<span class="c-dim">❯</span> <span class="c-bold">am start personal gm friday</span>
+  <span class="c-cyan">●</span> profile personal <span class="c-dim">· Max 20x · you@gmail.com · 5h window 34% used</span>
+  <span class="c-green">✓</span> task manager and four task agents ready: friday-1 friday-2 friday-3 friday-4 <span class="c-dim">(idle, personal)</span>
+  <span class="c-green">✓</span> workspace: ~/Projects/agent-manager · main · node 22.6 · your shell environment <span class="c-dim">(API keys stripped)</span>
+  <span class="c-dim">▸ starting Claude Code as friday…</span>
+
+<span class="c-frame">╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│</span> <span class="c-claude">✻</span> <span class="c-white">Welcome to Claude Code!</span>                                                                        <span class="c-frame">│
+│</span>                                                                                                  <span class="c-frame">│
+│</span>   <span class="c-dim">/help for help, /status for your current setup</span>                                                 <span class="c-frame">│
+│</span>                                                                                                  <span class="c-frame">│
+│</span>   <span class="c-dim">cwd: /Users/royliu/Projects/agent-manager</span>                                                      <span class="c-frame">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="c-claude">⏺</span> Hi, I'm Friday. I'm set up in ~/Projects/agent-manager with a task manager and four task agents,
+  all on your personal profile. Tell me what you want to get done, or ask me anything about the
+  project.
+
+<span class="c-dim">></span> <span class="c-bold">make the swarm work with codex too — same board, same reporting</span>
+
+<span class="c-claude">⏺</span> <span class="c-bold">Read</span>(src/providers/codex.ts)
+  <span class="c-dim">⎿  Read 142 lines</span>
+
+<span class="c-claude">⏺</span> I looked at how am launches Codex today. Most of the work is remembering the session, so an
+  agent can pick up where it left off after asking a question. Two things to settle first:
+
+    1. <span class="c-bold">Picking up where it left off.</span> The Codex tool on this machine cannot resume a paused
+       session; the next version can. We can require the newer version, or start fresh and hand
+       over a written summary. I'd let the agent decide once it has read the tool's help.
+    2. <span class="c-bold">Who signs off.</span> This touches how billing is kept separate, so I'd like you to do the
+       final review, not only me.
+
+  Proposal: one task for <span class="c-bold">friday-3</span>, plan first so you see the approach before any code.
+  Say "go" or change anything.
+
+<span class="c-dim">></span> <span class="c-bold">go — and let friday-3 decide 1 unless it's stuck</span>
+
+<span class="c-claude">⏺</span> <span class="c-bold">task manager</span> · create(#11 Codex worker adapter → friday-3, plan first, review: you)
+  <span class="c-dim">⎿  #11 created · assigned to friday-3 · two notes added</span>
+
+<span class="c-claude">⏺</span> Created <span class="c-bold">#11</span> Codex worker adapter → friday-3 · plan first · final review: you · eta Thu.
+  Noted on #11: the resume choice is friday-3's call; ask only if stuck. And what done means:
+  start a gm on a codex profile, give it a task, see it reported on the board with its cost.
+
+<span class="c-dim">· 15:42 · from the task manager: a question on #11 needs you</span>
+
+<span class="c-claude">⏺</span> friday-3 asked the task manager, and neither of us could settle it from the notes.
+
+  <span class="c-dim">What this is about</span>     #11 lets a gm and its agents run on a Codex profile. Agents pause when
+                         they ask a question and continue when answered, so remembering the
+                         session matters.
+  <span class="c-dim">What friday-3 knows</span>    Codex here is version 0.4.7 and cannot continue a paused session. 0.5 can.
+  <span class="c-dim">The question</span>           Require 0.5 and use its resume, or support 0.4 with a written handoff?
+  <span class="c-dim">Options</span>                A) require 0.5 — keeps the agent's working memory; blocks older setups.
+                         B) written handoff — works everywhere; loses in-progress reasoning.
+  <span class="c-dim">If no answer by 17:00</span>  friday-3 picks A and adds a clear error for older versions.
+  <span class="c-dim">My view</span>                A. #10 will pin tool versions anyway.
+
+  Answer here, or press <span class="c-bold">r</span> on #11 in the board.
+
+<span class="c-frame">╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│</span> <span class="c-dim">></span> <span class="c-dim">▏</span>                                                                                             <span class="c-frame">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+  <span class="c-dim">? for shortcuts</span>                                      <span class="c-cyan">friday</span> <span class="c-dim">· personal Max 20x · ctx 44% ·</span> <span class="c-yellow">3 need you</span></pre></div>
+    <figcaption>Everything after the setup lines is Claude Code. Friday's identity comes from the instructions <code>am</code> attaches; tool calls are collapsed the way Claude Code shows them; the status line is set by <code>am</code>. <b>One folder, one GM:</b> running <code>am start</code> again here resumes Friday; a git worktree is its own folder and can have its own GM.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="term"><div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>two terminals side by side</span><span class="spacer"></span><span class="cc">✻ claude</span><span>· left</span><span>am tasks · right</span></div>
+<pre><span class="c-frame">┌</span><span class="c-dim"> terminal 1 · am start personal gm friday </span><span class="c-frame">──────────────────</span><span class="c-frame">┬</span><span class="c-dim"> terminal 2 · am tasks </span><span class="c-frame">───────────────────────────────────────────</span><span class="c-frame">┐</span>
+<span class="c-frame">│</span><span class="c-dim">❯ </span><span class="c-bold">am start personal gm friday</span>                               <span class="c-frame">│</span><span class="c-bold"> friday</span><span class="c-dim"> · agent-manager · main</span>            personal <span class="c-dim">5h </span><span class="c-cyan">███░░░░░</span> 34%<span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-cyan">  ● </span>profile personal<span class="c-dim"> · Max 20x · 5h window 34% used</span>         <span class="c-frame">│</span><span class="c-dim"> team </span>friday-1 <span class="c-cyan">▶ </span>#12 <span class="c-dim">62%</span>    friday-2 <span class="c-cyan">▶ </span>#21 <span class="c-yellow">91% ↻</span>                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-green">  ✓ </span>task manager and four agents ready: friday-1 … friday-4 <span class="c-frame">│</span>      friday-3 <span class="c-yellow">⏸ </span>#11 <span class="c-yellow">you</span>    friday-4 <span class="c-cyan">▶ </span>#10 <span class="c-dim">23%</span>                    <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-green">  ✓ </span>workspace: ~/Projects/agent-manager · main · node 22.6  <span class="c-frame">│</span><span class="c-dim"> group </span><span class="c-cyan c-bold">[status]</span><span class="c-dim"> agent  eta</span>          <span class="c-yellow">1 need you</span><span class="c-dim"> · 15 tasks · $24.38</span><span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-dim">  ▸ starting Claude Code as friday…</span>                         <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span><span class="c-bold"> BLOCKED 2</span>                                                        <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">╭────────────────────────────────────────────────────────╮</span>  <span class="c-frame">│</span><span class="c-yellow">▎</span>#11 Codex worker adapter                           <span class="c-dim">friday-3 · Thu</span><span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">│ </span><span class="c-claude">✻ </span><span class="c-white">Welcome to Claude Code!</span>                             <span class="c-frame"> │</span>  <span class="c-frame">│</span><span class="c-yellow">   ? </span><span class="c-yellow">Require 0.5 and use its resume, or 0.4 with a handoff?</span>       <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">│ </span><span class="c-dim">  /help for help, /status for your current setup</span>      <span class="c-frame"> │</span>  <span class="c-frame">│</span><span class="c-yellow">▎</span>#20 Budget cap per task                              <span class="c-dim">queued · Wed</span><span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">│ </span><span class="c-dim">  cwd: /Users/royliu/Projects/agent-manager</span>           <span class="c-frame"> │</span>  <span class="c-frame">│</span><span class="c-dim">     waiting on #17</span>                                               <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">╰────────────────────────────────────────────────────────╯</span>  <span class="c-frame">│</span><span class="c-dim"> IN PROGRESS 4</span>                                                    <span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span><span class="c-cyan">▎</span>#12 Board view: group by status, agent, eta      <span class="c-dim">friday-1 · 17:00</span><span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-claude">⏺ </span>Hi, I&#x27;m Friday. I&#x27;m set up here with a task manager and   <span class="c-frame">│</span><span class="c-cyan">▎</span>#9 Task board                                    <span class="c-dim">friday-1 · 18:00</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>  four task agents on your personal profile. What would     <span class="c-frame">│</span><span class="c-cyan">▎</span>#21 Notice when an agent has stalled          <span class="c-dim">friday-2 · tomorrow</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>  you like to get done?                                     <span class="c-frame">│</span><span class="c-cyan">▎</span>#10 Spread work across profiles by quota      <span class="c-dim">friday-4 · tomorrow</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span><span class="c-dim"> REVIEW 1</span>                                                         <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-dim">&gt; </span><span class="c-bold">what needs me?</span>                                            <span class="c-frame">│</span><span class="c-magenta">▎</span>#16 Research: how I hear about events            <span class="c-dim">friday-4 · 14:00</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span><span class="c-magenta">   ✓ </span><span class="c-dim">friday is reviewing</span>                                          <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-claude">⏺ </span>Three things. #11: friday-3 asked whether to require      <span class="c-frame">│</span><span class="c-dim"> OPEN 5</span><span class="c-dim">   #13 #14 #17 #18 #19</span>                          <span class="c-dim">▸ collapsed</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>  Codex 0.5 or support 0.4 with a handoff; my view is 0.5.  <span class="c-frame">│</span><span class="c-dim"> DONE 3</span><span class="c-dim">   #7 #8 #15</span>                                    <span class="c-dim">▸ collapsed</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>  #10: the plan for spreading work across profiles waits    <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span>  for your go. #15: agents pausing on a question is done    <span class="c-frame">│</span><span class="c-frame">──</span><span class="c-bold"> #11 </span><span class="c-frame">───────────────────────────────────────────────────────────</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>  and reviewed; it needs your approval.                     <span class="c-frame">│</span><span class="c-bold"> Codex worker adapter  </span><span class="c-yellow">blocked · question → you</span><span class="c-dim">   P1 · Thu 12:00</span>  <span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span><span class="c-yellow"> ? friday-3 asks: Require 0.5 and use its resume, or support</span>      <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-dim">&gt; </span><span class="c-bold">approve 15, and go on 10</span>                                  <span class="c-frame">│</span><span class="c-yellow">   0.4 with a written handoff?  If no answer by 17:00: A.</span>  <span class="c-dim">r reply</span><span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-claude">⏺ </span><span class="c-bold">task manager</span> · approve(#15) · approve plan(#10)           <span class="c-frame">│</span><span class="c-dim"> ↑↓ move  ←→ section  ⏎ details  g group  r reply  a approve  q</span>   <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-dim">  ⎿  #15 done · #10 started on friday-4, who was idle</span>       <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-claude">⏺ </span>Done. #15 is accepted and friday-4 has started #10 from   <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span>  the approved plan. Only #11 still needs you.              <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span>                                                            <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">╭────────────────────────────────────────────────────────╮</span>  <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">│ </span><span class="c-dim">&gt; </span><span class="c-dim">▏</span>                                                   <span class="c-frame"> │</span>  <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-frame">╰────────────────────────────────────────────────────────╯</span>  <span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">│</span><span class="c-dim">  ? for shortcuts</span>             <span class="c-cyan">friday</span><span class="c-dim"> · personal · </span><span class="c-yellow">1 need you</span><span class="c-frame">│</span>                                                                  <span class="c-frame">│</span>
+<span class="c-frame">└────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────┘</span></pre></div>
+    <figcaption><b>Two commands, two terminals.</b> <code>am start</code> on the left launches Claude Code as Friday and nothing else. <code>am tasks</code> on the right is the board. The board chooses its layout from the terminal width: kanban columns at 110 characters or wider, a sectioned list below that, as here, with <kbd>←</kbd> <kbd>→</kbd> jumping between sections; it re-lays out when you resize. Chat and board are the same data: approving #15 and #10 in chat moved them on the right, and the status line dropped to one thing needing you.</figcaption>
+  </figure>
+</section>
+
+<section id="mockup">
+  <div class="sechead">
+    <span class="eyebrow">Interactive mockup · am tasks</span>
+    <h2>The board</h2>
+    <p>Click into the terminal. Arrows move, <kbd>⏎</kbd> opens a task, <kbd>g</kbd> regroups by status, agent or ETA. <code>#11</code> is waiting on you: press <kbd>r</kbd> and answer. <code>#10</code> is a plan waiting for approval: <kbd>a</kbd> starts it on the idle agent. The mouse works too: wheel or trackpad scrolls the column under the pointer, a click selects a card, a double-click opens it.</p>
+  </div>
+  <div class="termwrap">
+    <div class="term live" id="tui" tabindex="0" role="application" aria-label="Interactive mockup of the am tasks board. Use arrow keys to move, Enter to open a task, Escape to go back.">
+      <div class="chrome"><span class="dots"><i></i><i></i><i></i></span><span>am tasks · 150×34 · ~/Projects/agent-manager</span><span class="spacer"></span><span class="focus">● keyboard live</span></div>
+      <pre id="screen" aria-live="polite"></pre>
+    </div>
+    <div class="keys" id="keypad">
+      <span class="lbl">move</span>
+      <button data-key="ArrowLeft" aria-label="left">←</button><button data-key="ArrowUp" aria-label="up">↑</button><button data-key="ArrowDown" aria-label="down">↓</button><button data-key="ArrowRight" aria-label="right">→</button>
+      <button data-key="Enter">⏎ details</button><button data-key="Escape">esc</button>
+      <span class="sep"></span><span class="lbl">view</span>
+      <button data-key="g">g group</button><button data-key="s">s sort</button><button data-key="d">d done</button><button data-key="/">/ filter</button>
+      <span class="sep"></span><span class="lbl">act</span>
+      <button data-key="r">r reply</button><button data-key="a">a approve</button><button data-key="x">x reject</button><button data-key="n">n note</button><button data-key="p">p priority</button><button data-key="c">c cancel</button>
+      <button class="reset" id="reset">reset demo</button>
+    </div>
+  </div>
+</section>
+
+<section id="rules">
+  <div class="sechead">
+    <span class="eyebrow">PRD · the three rules</span>
+    <h2>Who talks to whom, in plain English, without losing the thread</h2>
+  </div>
+  <figure>
+    <svg viewBox="0 0 960 260" role="img" aria-label="An agent's structured question goes to the task manager, which answers from notes or escalates to Friday, which answers or escalates to you. The answer is written as a note and the agent is resumed.">
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+      <marker id="ar2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+      <rect x="20" y="70" width="190" height="76" rx="6" class="dark"/>
+      <text x="115" y="94" text-anchor="middle" class="mono on-dark">friday-3 on #11</text>
+      <text x="115" y="114" text-anchor="middle" class="mono dim-dark">asks with about · known · question</text>
+      <text x="115" y="132" text-anchor="middle" class="mono dim-dark">options · default, then pauses</text>
+      <rect x="280" y="70" width="180" height="76" rx="6" class="box"/>
+      <text x="370" y="94" text-anchor="middle" class="head">TASK MANAGER</text>
+      <text x="370" y="114" text-anchor="middle" class="lbl">answers as an agent, from</text>
+      <text x="370" y="132" text-anchor="middle" class="lbl">the brief, notes, code, your asks</text>
+      <rect x="530" y="70" width="180" height="76" rx="6" class="soft"/>
+      <text x="620" y="94" text-anchor="middle" class="head">FRIDAY</text>
+      <text x="620" y="114" text-anchor="middle" class="lbl">settled by the ask or design?</text>
+      <text x="620" y="132" text-anchor="middle" class="lbl">adds its own view</text>
+      <rect x="770" y="70" width="170" height="76" rx="6" class="box"/>
+      <text x="855" y="94" text-anchor="middle" class="head">YOU</text>
+      <text x="855" y="114" text-anchor="middle" class="lbl">reply in chat, or</text>
+      <text x="855" y="132" text-anchor="middle" class="mono">r on the board</text>
+      <path d="M210 92H280" class="edge" marker-end="url(#ar2)"/><text x="245" y="84" text-anchor="middle" class="lbl">ask</text>
+      <path d="M460 92H530" class="edge" marker-end="url(#ar2)"/><text x="495" y="84" text-anchor="middle" class="lbl">escalate</text>
+      <path d="M710 92H770" class="edge" marker-end="url(#ar2)"/><text x="740" y="84" text-anchor="middle" class="lbl">escalate</text>
+      <path d="M855 146V196H370V146" class="edge accent" marker-end="url(#ar2a)"/>
+      <path d="M620 146V176H390" class="edge accent dash"/>
+      <text x="620" y="212" text-anchor="middle" class="lbl">whoever answers, the answer goes to the task manager</text>
+      <path d="M310 146V228H115V146" class="edge accent" marker-end="url(#ar2a)"/>
+      <text x="212" y="244" text-anchor="middle" class="lbl">note appended · friday-3 resumed with the answer first</text>
+      <text x="480" y="36" text-anchor="middle" class="lbl">1 · Who talks to whom. The task manager answers most questions itself; only the rare judgment call climbs further. A question without its context is refused at the first hop.</text>
+    </svg>
+  </figure>
+  <div class="twoup">
+    <div>
+      <h3 style="margin-top:0">2 · Plain English, and every question carries its context</h3>
+      <p class="prose small muted">No jargon or internal names; the only shorthand is task ids, file paths and commands. The task manager refuses a question missing any field below. Reports must say what changed, how it was verified, what is left. Friday holds itself to the same rule with you.</p>
+      <div class="fields">
+        <div class="f">about</div><div>which task this is and what it is for</div>
+        <div class="f">known</div><div>what has been done, found or tried so far</div>
+        <div class="f">question</div><div>the exact question</div>
+        <div class="f">options</div><div>the choices considered, each with its trade-off</div>
+        <div class="f">default</div><div>what the agent will do if no answer arrives, and by when</div>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-top:0">3 · Checkpoint at 90%, then compact</h3>
+      <ol class="steps">
+        <li><span><b>Watch.</b> Each agent, Friday included, watches its context; the task manager shows it on the team strip.</span></li>
+        <li><span><b>Checkpoint.</b> At 90% the agent writes a note on its task: done, left, next, decisions and why.</span></li>
+        <li><span><b>Compact, then continue from the note.</b> The board is the memory; nothing important lives only in a window. Each agent also keeps a one-paragraph memory note for the project.</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="lifecycle">
+  <div class="sechead">
+    <span class="eyebrow">PRD · tasks</span>
+    <h2>Six statuses, one reason for every block</h2>
+  </div>
+  <figure>
+    <svg viewBox="0 0 960 230" role="img" aria-label="State machine: open to plan to in progress to review to done. Blocked sits below and returns to the status it left. Review can reject back to in progress. Any state can be cancelled.">
+      <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g class="mono">
+      <rect x="20" y="60" width="130" height="44" rx="22" class="box"/><text x="85" y="87" text-anchor="middle">open</text>
+      <rect x="210" y="60" width="130" height="44" rx="22" class="box" style="stroke:#8AACF2"/><text x="275" y="87" text-anchor="middle">plan</text>
+      <rect x="400" y="60" width="150" height="44" rx="22" class="box" style="stroke:#5BC8DC"/><text x="475" y="87" text-anchor="middle">in progress</text>
+      <rect x="610" y="60" width="130" height="44" rx="22" class="box" style="stroke:#DA8FC7"/><text x="675" y="87" text-anchor="middle">review</text>
+      <rect x="800" y="60" width="130" height="44" rx="22" class="box" style="stroke:#7DCB8C"/><text x="865" y="87" text-anchor="middle">done</text>
+      <rect x="400" y="160" width="150" height="44" rx="22" class="box" style="stroke:#E6B54B"/><text x="475" y="187" text-anchor="middle">blocked</text>
+      </g>
+      <path d="M150 82H210" class="edge" marker-end="url(#ar3)"/>
+      <path d="M340 82H400" class="edge" marker-end="url(#ar3)"/>
+      <path d="M550 82H610" class="edge" marker-end="url(#ar3)"/><text x="580" y="74" text-anchor="middle" class="lbl">report</text>
+      <path d="M740 82H800" class="edge" marker-end="url(#ar3)"/><text x="770" y="74" text-anchor="middle" class="lbl">approve</text>
+      <path d="M85 104 C85 150 200 150 200 150 L400 150 L400 104" class="edge dash" style="stroke:var(--ink-3)"/>
+      <text x="245" y="144" text-anchor="middle" class="lbl">small tasks skip plan</text>
+      <path d="M660 60 C640 20 520 20 500 60" class="edge" marker-end="url(#ar3)"/>
+      <text x="580" y="30" text-anchor="middle" class="lbl">send back with feedback · agent resumed</text>
+      <path d="M300 104 L440 160" class="edge" marker-end="url(#ar3)"/>
+      <path d="M475 104V160" class="edge" marker-end="url(#ar3)" marker-start="url(#ar3)"/>
+      <text x="486" y="136" class="lbl">returns to the status it left</text>
+      <text x="475" y="222" text-anchor="middle" class="lbl">reason: question → task manager | friday | you · waiting on #N · quota (resets 14:00) · budget · stalled</text>
+      <text x="865" y="130" text-anchor="middle" class="lbl">review stage: friday, then you</text>
+      <text x="865" y="190" text-anchor="middle" class="lbl">any → cancelled</text>
+      <text x="275" y="130" text-anchor="middle" class="lbl">plan (awaiting you) when plan-first</text>
+    </svg>
+    <figcaption>Ids are <code>#N</code>, never reused; sub-tasks get their own, and the root task stores your original ask verbatim. Notes travel with the task into every agent brief. Runs record each stretch of work with tokens, cost and context use.</figcaption>
+  </figure>
+</section>
+
+<section id="keys">
+  <div class="sechead">
+    <span class="eyebrow">PRD · the board</span>
+    <h2>Keys</h2>
+    <p>Header: Friday's name and workspace, the profile's quota bar, the team strip, and <code>3 need you</code>. Then columns for the current grouping, and a preview of the highlighted task.</p>
+  </div>
+  <div class="twoup">
+    <div class="tablewrap"><table>
+      <tbody>
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>move between cards and columns</td></tr>
+        <tr><td><kbd>⏎</kbd> / <kbd>esc</kbd></td><td>open a task: description, dispatch tree, runs, notes, the question in full, timeline / back</td></tr>
+        <tr><td><kbd>g</kbd> <kbd>s</kbd> <kbd>d</kbd></td><td>group by status → agent → eta · sort · hide done</td></tr>
+        <tr><td><kbd>/</kbd></td><td>filter by text or <code>#id</code></td></tr>
+        <tr><td><kbd>r</kbd></td><td>reply to the open question</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap"><table>
+      <tbody>
+        <tr><td><kbd>a</kbd> <kbd>x</kbd></td><td>approve (review → done, plan → start on the idle agent) · send back with feedback</td></tr>
+        <tr><td><kbd>n</kbd> <kbd>p</kbd> <kbd>c</kbd></td><td>note · priority · cancel</td></tr>
+        <tr><td><kbd>m</kbd> <kbd>e</kbd> <kbd>t</kbd> <kbd>o</kbd></td><td>in detail: reassign · ETA · transcript · open worktree</td></tr>
+        <tr><td><kbd>K</kbd> <kbd>q</kbd></td><td>pause every agent · quit; the team keeps working</td></tr>
+        <tr><td>grouping</td><td>status · agent (friday-1 … friday-4 · queued) · eta (past · today · tomorrow · this week · later · none)</td></tr>
+        <tr><td>mouse</td><td>wheel or trackpad scrolls the column or the detail under the pointer · click selects · double-click opens · hold <kbd>Shift</kbd> to select text</td></tr>
+        <tr><td>layout</td><td>follows the terminal width: kanban columns at 110 characters or wider, a sectioned list below that; re-lays out on every resize</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="sechead">
+    <span class="eyebrow">Decisions</span>
+    <h2>Where the design departs from the brief</h2>
+  </div>
+  <div class="decision">
+    <div class="k">The task manager is a board on the surface and an agent underneath</div>
+    <div>Bookkeeping, assignment and watching are deterministic. Answering the team is an agent: a persistent conversation on the same profile with read-only access to the workspace, reasoning from the project brief and everything recorded, deciding the way Friday would. Only the rare judgment call reaches Friday, so Friday stays with you.</div>
+    <div class="k">Agents are persistent team members</div>
+    <div>Four named agents with project memory, not a process per task. This is what makes the 90% rule necessary and visible.</div>
+    <div class="k">You set the workspace; Friday carries it</div>
+    <div>The folder and shell you start from become the workspace brief in every assignment. Friday may give a task its own worktree when two agents would otherwise edit one checkout, and says so on the task.</div>
+    <div class="k">All agents on Friday's profile by default</div>
+    <div>Five sessions on one Pro plan will hit the 5-hour window. Friday warns at 80% and offers to move an agent to another profile.</div>
+    <div class="k">Plain English is enforced by tool schema</div>
+    <div>Required fields on questions and reports work every time; a prompt rule works most of the time.</div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="sechead">
+    <span class="eyebrow">Roadmap and open questions</span>
+    <h2>Four milestones, each with a demo</h2>
+  </div>
+  <div class="milestones">
+    <div><div class="m">M1</div><div class="t">Start</div><code>am start</code>, four agents, board read-only, report<div class="exit">Friday says hello; one ask becomes a task an agent finishes.</div></div>
+    <div><div class="m">M2</div><div class="t">Conversation</div>structured ask with pause and resume, escalation, board keys, notes in briefs<div class="exit">An agent's question reaches you on the board; you answer; it finishes.</div></div>
+    <div><div class="m">M3</div><div class="t">Team</div>team strip, checkpoint and compact at 90%, memory notes, workspace propagation, watchdog, cost per task<div class="exit">friday-2 hits 90%, checkpoints, compacts, finishes. You change branch in chat; the next task uses it.</div></div>
+    <div><div class="m">M4</div><div class="t">Polish</div>quota guard and agent move, triage, notifications, <code>--json</code><div class="exit">Daily-driver quality.</div></div>
+  </div>
+  <div class="prose" style="margin-top:32px">
+    <h3 style="margin-top:0">Open questions</h3>
+    <ol>
+      <li><b>The 90% knob.</b> Confirm the exact compaction setting in current Claude Code and Codex; if neither exposes one, the task manager's checkpoint-and-compact request is the mechanism.</li>
+      <li><b>Friday's inbox latency.</b> Events arrive at Friday's next turn. Acceptable, or inject when idle?</li>
+      <li><b>Team size on Pro.</b> Keep four and warn, or default to two on Pro plans?</li>
+    </ol>
+  </div>
+  <footer>Short PRD in <code>docs/PRD-swarm.md</code>; implementation detail (tools, storage, data model, CLI) in <code>docs/PRD-swarm-appendix.md</code>.</footer>
+</section>
+</div>
+
+<script>
+(function(){
+'use strict';
+var NOW = new Date(2026, 8, 6, 16, 10);
+var W = 150, ROWS = 34;
+var GM = 'friday';
+function D(m, day, h, mi){ return new Date(2026, m-1, day, h||0, mi||0); }
+
+var PROFILE = {name:'personal', win:'5h', pct:34, account:'you@gmail.com', plan:'Max 20x'};
+var GM_CTX = 44;
+var TEAM;
+function seedTeam(){
+  return [
+    {name:'friday-1', model:'Opus 5', ctx:62, compacting:false},
+    {name:'friday-2', model:'Opus 5', ctx:91, compacting:true},
+    {name:'friday-3', model:'Opus 5', ctx:48, compacting:false},
+    {name:'friday-4', model:'Opus 5', ctx:23, compacting:false}
+  ];
+}
+function agentOf(n){ for (var i=0;i<TEAM.length;i++) if (TEAM[i].name===n) return TEAM[i]; return null; }
+
+function seed(){
+  return [
+    {id:7, title:'Swarm daemon and task store', status:'done', pri:1, eta:D(9,5,15), agent:'friday-1', usd:6.12, tok:'2.4M', run:1, created:D(9,5,9,10), updated:D(9,5,14,30), branch:'swarm/7-daemon',
+     desc:'Add the task manager service: a single writer over a local socket that owns one file per task, an append-only event log, and my inbox. Write files atomically the way the profile registry does. Let the board subscribe to changes.',
+     ask:'let’s start building the swarm layer — the service first, then the tools, then the board',
+     notes:[{at:D(9,5,9,12),by:GM,kind:'acceptance',text:'Start, stop and status work; tasks survive a hard kill in the middle of a write; the board sees an event within 100 ms of a write.'}],
+     qs:[], runs:[{n:1,from:D(9,5,9,20),to:D(9,5,14,30),exit:'done',log:'runs/r-7-1.log'}],
+     result:'Service, store, events and subscribe are in, with 22 tests. Verified by killing the service mid-write and restarting.',
+     events:[{at:D(9,5,14,30),text:'accepted by you'},{at:D(9,5,14,5),text:GM+' approved → review (you)'},{at:D(9,5,13,50),text:'reported done'},{at:D(9,5,9,20),text:'assigned → friday-1'},{at:D(9,5,9,10),text:'created by '+GM}]},
+    {id:8, title:'Tool bridge: manager and agent tool sets', status:'done', pri:1, eta:D(9,5,18), agent:'friday-2', usd:4.40, tok:'1.7M', run:1, created:D(9,5,9,12), updated:D(9,5,17,5), branch:'swarm/8-tools',
+     desc:'Give each session the tools for its role. I get create, dispatch, note, answer, approve, reject and my inbox; agents get read, note, progress, eta, ask, checkpoint and report, limited to their own task.',
+     ask:'let’s start building the swarm layer — the service first, then the tools, then the board',
+     notes:[{at:D(9,5,9,14),by:GM,kind:'decision',text:'One bridge, role chosen by a flag; no separate agent package.'}],
+     qs:[], runs:[{n:1,from:D(9,5,14,40),to:D(9,5,17,5),exit:'done',log:'runs/r-8-1.log'}],
+     result:'Both tool sets done; role limits tested against a scripted agent that tried to touch another task.',
+     events:[{at:D(9,5,17,5),text:'accepted by you'},{at:D(9,5,16,50),text:'reported done'},{at:D(9,5,14,40),text:'assigned → friday-2'},{at:D(9,5,9,12),text:'created by '+GM}]},
+    {id:9, title:'Task board', status:'in_progress', pri:1, eta:D(9,6,18), agent:'friday-1', usd:3.05, tok:'—', run:0, umbrella:true, created:D(9,6,10,20), updated:D(9,6,14,5), branch:'—',
+     desc:'Umbrella for the board: a screen listing every task I create, grouped by status, agent or ETA, browsable with the arrow keys, Enter for detail. Its status follows the three sub-tasks.',
+     ask:'i want a tui showing the tasks the gm creates, grouped by status / agent / eta, arrow keys to browse, enter for details',
+     notes:[{at:D(9,6,10,22),by:GM,kind:'plan',text:'Three sub-tasks in order for friday-1: board view (#12), then detail view (#13), then the action keys (#14). #13 waits for #12.'},{at:D(9,6,10,25),by:GM,kind:'acceptance',text:'Works at 110 columns; six status columns; a preview pane under the board.'}],
+     qs:[], runs:[], result:null,
+     events:[{at:D(9,6,14,5),text:'#12 started → in progress'},{at:D(9,6,10,22),text:'split into #12 #13 #14'},{at:D(9,6,10,20),text:'created by '+GM}]},
+    {id:12, title:'Board view: group by status, agent, eta', status:'in_progress', pri:1, eta:D(9,6,17), agent:'friday-1', parent:9, usd:2.10, tok:'640k', run:1, created:D(9,6,10,22), updated:D(9,6,15,58), branch:'swarm/12-board-view', progress:'columns and arrow keys work; wiring the eta buckets now',
+     desc:'Draw one column per group for the current grouping, two-line cards (id and title, then agent and eta), an inverted highlight, and the preview pane. g cycles the grouping, s the sort. Reuse the padding helpers the status screen already has.',
+     notes:[{at:D(9,6,10,25),by:GM,kind:'acceptance',text:'Works at 110 columns; six status columns; a preview pane under the board.'},{at:D(9,6,13,10),by:'friday-1',kind:'finding',text:'The layout library wraps columns at narrow widths, so I am padding lines myself the way the status screen does.'}],
+     qs:[], runs:[{n:1,from:D(9,6,14,5),to:null,exit:null,log:'runs/r-12-1.log'}], result:null,
+     events:[{at:D(9,6,15,58),text:'progress: wiring the eta buckets'},{at:D(9,6,14,5),text:'assigned → friday-1'},{at:D(9,6,10,22),text:'created by '+GM}]},
+    {id:13, title:'Detail view with the dispatch tree', status:'open', pri:1, eta:D(9,6,18), agent:'friday-1', parent:9, deps:[12], usd:0, tok:'—', run:0, created:D(9,6,10,22), updated:D(9,6,10,22), branch:'—',
+     desc:'Enter on a card opens the task: header, agent line with cost and context use, description, dispatch (sub-tasks, what it waits for, run history), notes, the open question in its full shape, timeline. Escape goes back with the selection kept.',
+     notes:[], qs:[], runs:[], result:null,
+     events:[{at:D(9,6,10,22),text:'created by '+GM+' · waits for #12'}]},
+    {id:14, title:'Board keys: reply, approve, reject, note', status:'open', pri:2, eta:D(9,7,12), agent:null, parent:9, deps:[13], usd:0, tok:'—', run:0, created:D(9,6,10,22), updated:D(9,6,10,22), branch:'—',
+     desc:'r answers the open question on the highlighted task, a approves (review to done, or plan to in progress), x sends it back with feedback, n adds a note. Each goes through the task manager so I see it too.',
+     notes:[], qs:[], runs:[], result:null,
+     events:[{at:D(9,6,10,22),text:'created by '+GM+' · queued until #13 lands'}]},
+    {id:10, title:'Spread work across profiles by quota', status:'plan', awaiting:true, pri:1, eta:D(9,7,18), agent:'friday-4', deps:[11], usd:0, tok:'—', run:0, created:D(9,6,11,40), updated:D(9,6,12,5), branch:'—',
+     desc:'When an agent may run on more than one profile, pick the one with the most room left in its shortest window, keep to the per-profile limit of two at a time, and when nothing has room, show the task as blocked on quota with the time the window resets.',
+     ask:'the swarm should spread across my subscriptions and never push one past its window',
+     notes:[{at:D(9,6,12,5),by:GM,kind:'plan',text:'1) A profile is eligible if it uses the same tool, is signed in, and has no per-token billing hazard. 2) Score by how much of the shortest window is used; break ties on the weekly window. 3) Reserve the slot before starting the agent so two tasks cannot grab the same one. 4) Blocked-on-quota cards show the earliest reset time.'},{at:D(9,6,11,42),by:GM,kind:'acceptance',text:'With work at 80% and personal at 20%, a new task lands on personal. With both above 95%, the card reads blocked · quota, resets 14:00.'}],
+     qs:[], runs:[], result:null,
+     events:[{at:D(9,6,12,5),text:'plan written by '+GM+' → awaiting your approval'},{at:D(9,6,11,40),text:'created by '+GM+' · waits for #11'}]},
+    {id:11, title:'Codex worker adapter', status:'blocked', blocked:{kind:'question', to:'you'}, resumeTo:'in_progress', pri:1, eta:D(9,10,12), agent:'friday-3', usd:1.84, tok:'812k', run:2, created:D(9,6,13,50), updated:D(9,6,15,42), branch:'swarm/11-codex-adapter',
+     desc:'Make it possible to start a gm and its agents on a Codex profile: launch Codex the way am already does, remember the session so an agent can continue after a question, and report through the same tools. Cost must land on the Codex profile.',
+     ask:'make the swarm work with codex too — same board, same reporting',
+     notes:[{at:D(9,6,13,50),by:GM,kind:'acceptance',text:'Start a gm on a codex profile, give it a task, see it reported on the board with its cost on that profile.'},{at:D(9,6,13,52),by:GM,kind:'decision',text:'The resume choice is friday-3’s call; ask only if stuck. Reuse the existing Codex launcher rather than writing a new one.'},{at:D(9,6,14,31),by:'task manager',kind:'context',text:'Answered friday-3 from the notes: read the session id from the rollout file name, not the event stream.'}],
+     qs:[{at:D(9,6,14,30),from:'friday-3',to:'tm',about:'#11, getting the session id so an agent can continue later.',known:'Codex writes a rollout file and can also print a stream of events.',question:'Which one should I read to get the session id?',options:[],dflt:'Read the rollout file name by 14:45.',answer:'The rollout file name (from the note at 13:52).',answeredBy:'task manager',answeredAt:D(9,6,14,31),path:[]},
+         {at:D(9,6,15,41),from:'friday-3',to:'you',
+          about:'#11 makes it possible to run a gm and its agents on a Codex profile. Agents pause when they ask a question and continue when answered, so remembering the session matters.',
+          known:'Codex here is version 0.4.7 and cannot continue a paused session. Version 0.5 can.',
+          question:'Require 0.5 and use its resume, or support 0.4 with a written handoff?',
+          options:['A) require 0.5 — keeps the agent’s working memory; blocks older setups.','B) written handoff — works everywhere; the agent loses its in-progress reasoning.'],
+          dflt:'By 17:00 I will pick A and add a clear error for older versions.',
+          answer:null,answeredBy:null,
+          path:[{at:D(9,6,15,41),to:'gm',note:'could not settle it from the notes'},{at:D(9,6,15,42),to:'you',note:'my view: A. #10 will pin tool versions anyway'}]}],
+     runs:[{n:1,from:D(9,6,13,55),to:D(9,6,14,30),exit:'paused on a question · answered from notes',log:'runs/r-11-1.log'},{n:2,from:D(9,6,14,31),to:D(9,6,15,41),exit:'paused on a question → you',log:'runs/r-11-2.log'}], result:null,
+     events:[{at:D(9,6,15,42),text:GM+' → you, with its view'},{at:D(9,6,15,41),text:'question → task manager → '+GM},{at:D(9,6,14,31),text:'task manager answered from notes · run 2'},{at:D(9,6,14,30),text:'question → task manager'},{at:D(9,6,13,55),text:'assigned → friday-3 · plan first'},{at:D(9,6,13,50),text:'created by '+GM}]},
+    {id:15, title:'Agents pause on a question and resume', status:'review', review:'you', pri:1, eta:D(9,6,17), agent:'friday-2', usd:5.30, tok:'1.9M', run:1, created:D(9,6,11,5), updated:D(9,6,15,48), branch:'swarm/15-ask-resume',
+     desc:'When an agent asks, record the question, mark the task blocked on it, and pause the agent keeping its session. When an answer arrives, add it as a note and resume the agent with the answer as its first message. Cover a crash between pause and resume.',
+     ask:'workers should ask instead of guessing, and pick up where they left off',
+     notes:[{at:D(9,6,11,7),by:GM,kind:'acceptance',text:'A scripted agent asks, pauses, is resumed with the answer and finishes. Kill the service between ask and answer, restart it, and the answer still resumes the agent.'},{at:D(9,6,15,48),by:GM,kind:'decision',text:'Reviewed: the change is small and the tests cover resume after a crash. I recommend accepting.'}],
+     qs:[], runs:[{n:1,from:D(9,6,13,0),to:D(9,6,15,40),exit:'done',log:'runs/r-15-1.log'}],
+     result:'Asking pauses the agent and keeps its session; the answer resumes it as the first message. Verified with 14 tests including a crash between ask and answer. Nothing left. Watch: Codex resume depends on #11.',
+     events:[{at:D(9,6,15,48),text:GM+' approved → review (you)'},{at:D(9,6,15,40),text:'reported done'},{at:D(9,6,13,0),text:'assigned → friday-2'},{at:D(9,6,11,5),text:'created by '+GM}]},
+    {id:16, title:'Research: how I hear about events while we are talking', status:'review', review:'gm', pri:2, eta:D(9,6,14), agent:'friday-4', usd:0.62, tok:'210k', run:1, created:D(9,6,11,50), updated:D(9,6,15,55), branch:'—',
+     desc:'Find the ways the task manager can get an event (a question, a finished task, a stalled agent) in front of me while I am mid-conversation with Roy. Recommend one and say what it costs in delay.',
+     ask:'how does the gm find out a worker finished if I’m not typing?',
+     notes:[{at:D(9,6,15,55),by:'friday-4',kind:'finding',text:'Three options: deliver at the start of the next turn, keep the session going at the end of a turn when items are unread, or a wrapper that injects while idle. I recommend the first two together; the wrapper is the open question.'}],
+     qs:[], runs:[{n:1,from:D(9,6,12,0),to:D(9,6,15,55),exit:'done',log:'runs/r-16-1.log'}],
+     result:'Three options compared with their delay; the two hook-based ones recommended together, the wrapper deferred. Verified against the current tool documentation.',
+     events:[{at:D(9,6,15,55),text:'reported done → review ('+GM+')'},{at:D(9,6,12,0),text:'assigned → friday-4'},{at:D(9,6,11,50),text:'created by '+GM}]},
+    {id:17, title:'Cost per task', status:'open', pri:2, eta:D(9,8,18), agent:null, usd:0, tok:'—', run:0, created:D(9,6,12,10), updated:D(9,6,12,10), branch:'—',
+     desc:'Read the profile’s transcripts for each run’s session and add up tokens and list-price cost per run and per task. Show it on the preview, in detail, and as column totals.',
+     notes:[], qs:[], runs:[], result:null, events:[{at:D(9,6,12,10),text:'created by '+GM+' · queued'}]},
+    {id:18, title:'README: the swarm section', status:'open', pri:3, eta:D(9,11,18), agent:null, usd:0, tok:'—', run:0, created:D(9,6,12,12), updated:D(9,6,12,12), branch:'—',
+     desc:'Document am start, am tasks and the question ladder in the README, in the same voice as the existing sections.',
+     notes:[], qs:[], runs:[], result:null, events:[{at:D(9,6,12,12),text:'created by '+GM+' · queued'}]},
+    {id:19, title:'Notify me when something needs me', status:'open', pri:3, eta:null, agent:null, usd:0, tok:'—', run:0, created:D(9,6,12,14), updated:D(9,6,12,14), branch:'—',
+     desc:'A terminal bell and a desktop notification when a task starts waiting on you: a question, a plan to approve, or a review. One setting turns it off.',
+     notes:[], qs:[], runs:[], result:null, events:[{at:D(9,6,12,14),text:'created by '+GM+' · no eta'}]},
+    {id:20, title:'Budget cap per task', status:'blocked', blocked:{kind:'dependency', task:17}, resumeTo:'open', pri:2, eta:D(9,9,18), agent:null, deps:[17], usd:0, tok:'—', run:0, created:D(9,6,12,16), updated:D(9,6,12,16), branch:'—',
+     desc:'Pause an agent when its task crosses the cost or token cap; mark the task blocked on budget with a note; tell me. Needs cost per task from #17.',
+     notes:[], qs:[], runs:[], result:null, events:[{at:D(9,6,12,16),text:'created by '+GM+' · waits for #17'}]},
+    {id:21, title:'Notice when an agent has stalled', status:'in_progress', pri:2, eta:D(9,7,12), agent:'friday-2', usd:0.95, tok:'300k', run:2, created:D(9,6,15,45), updated:D(9,6,16,8), branch:'swarm/21-watchdog', progress:'checkpoint written at 91% context; compacting, then adding the stall timeout setting',
+     desc:'Treat the transcript’s last write time and the process id as a heartbeat. No progress for 15 minutes marks the task blocked as stalled and tells me; a process that vanished without reporting fails the run and puts the task back to open with a note.',
+     notes:[{at:D(9,6,15,46),by:GM,kind:'acceptance',text:'Kill an agent hard: within one check the task shows a failed run and returns to open with a note saying why.'},{at:D(9,6,16,8),by:'friday-2',kind:'checkpoint',text:'Done: heartbeat from transcript time and process id, with tests. Left: the stall timeout setting and the message to '+GM+' when an agent stalls. Next: add the setting, then the message. Decision: a vanished process fails the run rather than marking it stalled, so the task frees up at once.'}],
+     qs:[], runs:[{n:1,from:D(9,6,15,52),to:D(9,6,16,8),exit:'compacted at 91% context after a checkpoint',log:'runs/r-21-1.log'},{n:2,from:D(9,6,16,8),to:null,exit:null,log:'runs/r-21-2.log'}], result:null,
+     events:[{at:D(9,6,16,8),text:'context 91% → checkpoint written → compacting'},{at:D(9,6,15,52),text:'assigned → friday-2'},{at:D(9,6,15,45),text:'created by '+GM}]}
+  ];
+}
+
+var tasks, state, layout=null;
+function reset(){
+  tasks = seed(); TEAM = seedTeam();
+  state = {view:'board', group:'status', sort:'priority', showDone:true, selId:11, mode:'normal', input:'', filter:'', toast:'', toastT:0};
+  render();
+}
+
+// ---------- helpers ----------
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function S(t,c){ return {t:String(t), c:c||''}; }
+function fit(s,w){ s=String(s); if (w<0) w=0; if (s.length>w) s = w>1 ? s.slice(0,w-1)+'…' : s.slice(0,w); while (s.length<w) s+=' '; return s; }
+function padL(s,w){ s=String(s); while (s.length<w) s=' '+s; return s; }
+function rep(ch,n){ var o=''; for (var i=0;i<n;i++) o+=ch; return o; }
+function vis(segs){ var n=0; for (var i=0;i<segs.length;i++) n+=segs[i].t.length; return n; }
+function emit(segs){
+  var html='', n=0;
+  for (var i=0;i<segs.length;i++){
+    var s=segs[i], t=s.t;
+    if (n+t.length>W){ t=t.slice(0, Math.max(0, W-n)); }
+    n+=t.length;
+    if (!t) continue;
+    html += s.c ? '<span class="'+s.c+'">'+esc(t)+'</span>' : esc(t);
+  }
+  if (n<W) html += rep(' ', W-n);
+  return html;
+}
+function wrap(text, width){
+  var words=String(text).split(/\s+/), lines=[], cur='';
+  for (var i=0;i<words.length;i++){ var w=words[i]; if ((cur+' '+w).trim().length>width){ if (cur) lines.push(cur); cur=w; } else cur=(cur?cur+' ':'')+w; }
+  if (cur) lines.push(cur); return lines;
+}
+function two(n){ return (n<10?'0':'')+n; }
+function hm(d){ return two(d.getHours())+':'+two(d.getMinutes()); }
+function dayName(d){ return d.toLocaleDateString('en-US',{weekday:'short'}); }
+function dateLong(d){ return dayName(d)+' '+d.getDate()+' '+d.toLocaleDateString('en-US',{month:'short'})+' '+hm(d); }
+function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function etaShort(t){
+  if (!t.eta) return 'no eta';
+  var d=t.eta, sod=startOfDay(NOW), diffDays=Math.round((startOfDay(d)-sod)/864e5);
+  if (diffDays===0) return 'today '+hm(d);
+  if (diffDays===1) return 'tomorrow '+hm(d);
+  if (diffDays>1 && diffDays<7) return dayName(d);
+  return d.getDate()+' '+d.toLocaleDateString('en-US',{month:'short'});
+}
+function rel(d){
+  var ms=d-NOW, past=ms<0; ms=Math.abs(ms);
+  var m=Math.round(ms/6e4), h=Math.floor(m/60), dd=Math.floor(h/24);
+  var s = dd>0 ? dd+'d '+(h%24)+'h' : h>0 ? h+'h '+(m%60)+'m' : m+'m';
+  return past ? 'overdue '+s : 'in '+s;
+}
+function active(t){ return t.status!=='done' && t.status!=='cancelled'; }
+function overdue(t){ return !!t.eta && active(t) && t.eta<NOW; }
+function needsYou(t){ return (t.status==='blocked' && t.blocked && t.blocked.kind==='question' && t.blocked.to==='you') || (t.status==='review' && t.review==='you') || (t.status==='plan' && t.awaiting); }
+function byId(id){ for (var i=0;i<tasks.length;i++) if (tasks[i].id===id) return tasks[i]; return null; }
+function usd(n){ return '$'+n.toFixed(2); }
+function statusColor(s){ return {open:'c-dim', plan:'c-blue', in_progress:'c-cyan', blocked:'c-yellow', review:'c-magenta', done:'c-green', cancelled:'c-red'}[s]||''; }
+function who(to){ return to==='tm' ? 'task manager' : to==='gm' ? GM : 'you'; }
+function statusLabel(t){
+  switch (t.status){
+    case 'blocked': return 'blocked · ' + (t.blocked.kind==='question' ? 'question → '+who(t.blocked.to) : t.blocked.kind==='dependency' ? 'waiting on #'+t.blocked.task : t.blocked.kind);
+    case 'review': return 'review · ' + (t.review==='you' ? 'you' : GM);
+    case 'plan': return t.awaiting ? 'plan · awaiting you' : 'plan';
+    case 'in_progress': return 'in progress';
+    default: return t.status;
+  }
+}
+function bar(pct, w){ var f=Math.round(pct/100*w); return rep('█',f)+rep('░',w-f); }
+function openQ(t){ for (var i=t.qs.length-1;i>=0;i--) if (!t.qs[i].answer) return t.qs[i]; return null; }
+function toast(msg){ state.toast=msg; state.toastT=Date.now(); setTimeout(function(){ if (Date.now()-state.toastT>=3900){ state.toast=''; render(); } }, 4000); }
+function agentState(a){
+  var i, t;
+  for (i=0;i<tasks.length;i++){ t=tasks[i]; if (t.agent===a.name && t.status==='in_progress' && !t.umbrella) return {state:a.compacting?'compacting':'working', task:t}; }
+  for (i=0;i<tasks.length;i++){ t=tasks[i]; if (t.agent===a.name && t.status==='blocked' && t.blocked.kind==='question') return {state:'waiting', task:t}; }
+  var nxt=tasks.filter(function(x){ return x.agent===a.name && (x.status==='open' || x.status==='plan'); }).sort(sorter())[0];
+  return {state:'idle', next:nxt};
+}
+
+// ---------- grouping ----------
+var STATUS_COLS=[['open','OPEN'],['plan','PLAN'],['in_progress','IN PROGRESS'],['blocked','BLOCKED'],['review','REVIEW'],['done','DONE']];
+var ETA_COLS=[['past','PAST'],['today','TODAY'],['tomorrow','TOMORROW'],['week','THIS WEEK'],['later','LATER'],['none','NO ETA']];
+function bucket(t){
+  if (!t.eta) return 'none';
+  var sod=startOfDay(NOW), days=Math.round((startOfDay(t.eta)-sod)/864e5);
+  if (days<0) return 'past'; if (days===0) return 'today'; if (days===1) return 'tomorrow'; if (days<7) return 'week'; return 'later';
+}
+function matches(t){
+  var f=state.filter.trim().toLowerCase(); if (!f) return true;
+  if (f[0]==='#') return String(t.id)===f.slice(1) || ('#'+t.id).indexOf(f)===0;
+  return (t.title+' '+(t.agent||'')+' '+t.status).toLowerCase().indexOf(f)>=0;
+}
+function etaCmp(a,b){ if (!a.eta && !b.eta) return 0; if (!a.eta) return 1; if (!b.eta) return -1; return a.eta-b.eta; }
+function sorter(){
+  if (state.sort==='priority') return function(a,b){ return (a.pri-b.pri) || etaCmp(a,b) || (a.id-b.id); };
+  if (state.sort==='eta') return function(a,b){ return etaCmp(a,b) || (a.id-b.id); };
+  if (state.sort==='updated') return function(a,b){ return b.updated-a.updated; };
+  return function(a,b){ return a.id-b.id; };
+}
+function groups(){
+  var list=tasks.filter(function(t){ return (state.showDone || active(t)) && matches(t); }).sort(sorter());
+  var cols;
+  if (state.group==='status') cols=STATUS_COLS.map(function(c){ return {key:c[0], label:c[1], items:list.filter(function(t){ return t.status===c[0] || (c[0]==='done' && t.status==='cancelled'); })}; });
+  else if (state.group==='agent') cols=TEAM.map(function(a){ return a.name; }).concat(['queued']).map(function(n){ return {key:n, label:n.toUpperCase(), items:list.filter(function(t){ return (t.agent||'queued')===n; })}; });
+  else cols=ETA_COLS.map(function(c){ return {key:c[0], label:c[1], items:list.filter(function(t){ return bucket(t)===c[0]; })}; });
+  return cols;
+}
+function locate(cols, id){ for (var c=0;c<cols.length;c++) for (var r=0;r<cols[c].items.length;r++) if (cols[c].items[r].id===id) return {c:c,r:r}; return null; }
+function ensureSel(cols){
+  var p=locate(cols, state.selId); if (p) return p;
+  for (var c=0;c<cols.length;c++) if (cols[c].items.length){ state.selId=cols[c].items[0].id; return {c:c,r:0}; }
+  state.selId=null; return null;
+}
+
+// ---------- board ----------
+function renderBoard(){
+  var cols=groups(), pos=ensureSel(cols), sel=state.selId?byId(state.selId):null;
+  var lines=[];
+  var need=tasks.filter(needsYou).length;
+  var inbox=tasks.filter(function(t){ return t.status==='review' && t.review==='gm'; }).length;
+  var total=0; tasks.forEach(function(t){ total+=t.usd; });
+  var sessions=1+TEAM.length;
+
+  // line 1: identity + quota
+  var left=[S(' '+GM,'c-bold'),S(' · ~/Projects/agent-manager · main','c-dim')];
+  var qc=PROFILE.pct>=85?'c-red':PROFILE.pct>=60?'c-yellow':'c-cyan';
+  var right=[S(PROFILE.name+' '),S(PROFILE.win+' ','c-dim'),S(bar(PROFILE.pct,8),qc),S(' '+PROFILE.pct+'%'),S(' · '+sessions+' sessions · '+GM+' ctx '+GM_CTX+'% ','c-dim')];
+  lines.push(emit(left.concat([S(rep(' ',Math.max(1,W-vis(left)-vis(right))))],right)));
+
+  // line 2: team strip
+  var strip=[S(' team ','c-dim')];
+  TEAM.forEach(function(a,i){
+    var st=agentState(a); strip.push(S(i?'   ':' '));
+    strip.push(S(a.name+' ', a.name===(sel&&sel.agent)?'c-bold':''));
+    if (st.state==='working') strip.push(S('▶ ','c-cyan'),S('#'+st.task.id+' '),S('ctx '+a.ctx+'%', a.ctx>=90?'c-yellow':'c-dim'));
+    else if (st.state==='compacting') strip.push(S('▶ ','c-cyan'),S('#'+st.task.id+' '),S('ctx '+a.ctx+'% ','c-yellow'),S('↻ compacting','c-yellow'));
+    else if (st.state==='waiting') strip.push(S('⏸ ','c-yellow'),S('#'+st.task.id+' '),S('waiting on '+who(st.task.blocked.to), st.task.blocked.to==='you'?'c-yellow':'c-dim'));
+    else strip.push(S('· idle','c-dim'), S(st.next ? (st.next.status==='plan'&&st.next.awaiting ? ', #'+st.next.id+' when you approve' : ', #'+st.next.id+' next') : '', 'c-dim'));
+  });
+  lines.push(emit(strip));
+
+  // line 3: tabs + counts
+  var tabs=[S(' group ','c-dim')]; ['status','agent','eta'].forEach(function(g){ tabs.push(g===state.group?S('['+g+']','c-cyan c-bold'):S(' '+g+' ','c-dim')); });
+  tabs.push(S('   sort ','c-dim'),S(state.sort),S('   filter ','c-dim'),S(state.mode==='filter'?state.filter+'▏':(state.filter||'—'), state.filter?'c-cyan':''));
+  var rt=[S(need+' need you', need?'c-yellow':'c-dim'),S(' · '+GM+' inbox '+inbox+' · '+tasks.length+' tasks · '+usd(total)+' list-price ','c-dim')];
+  lines.push(emit(tabs.concat([S(rep(' ',Math.max(1,W-vis(tabs)-vis(rt))))],rt)));
+  lines.push(emit([S('')]));
+
+  // columns
+  var n=cols.length, gap=2, cw=Math.floor((W-2-gap*(n-1))/n);
+  var MAXC=6, offsets=cols.map(function(col,c){ if (pos && pos.c===c && pos.r>=MAXC) return pos.r-MAXC+1; return 0; });
+  layout={cols:cols, n:n, gap:gap, cw:cw, maxc:MAXC, offsets:offsets, firstCardRow:6};
+  var hdr=[S('  ')], und=[S('  ')];
+  cols.forEach(function(col,c){ if (c) { hdr.push(S(rep(' ',gap))); und.push(S(rep(' ',gap))); }
+    var lab=col.label+' ', cnt=String(col.items.length); hdr.push(S(fit(lab, cw-cnt.length), pos&&pos.c===c?'c-bold':'c-dim'), S(cnt,'c-dim')); und.push(S(rep('─',cw),'c-rule')); });
+  lines.push(emit(hdr)); lines.push(emit(und));
+  for (var row=0; row<MAXC; row++){
+    for (var half=0; half<2; half++){
+      var segs=[S('  ')];
+      cols.forEach(function(col,c){
+        if (c) segs.push(S(rep(' ',gap)));
+        var idx=row+offsets[c], t=col.items[idx], isSel=t && pos && pos.c===c && pos.r===idx;
+        var more = idx===offsets[c]+MAXC-1 && col.items.length>offsets[c]+MAXC;
+        if (!t){ segs.push(S(rep(' ',cw))); return; }
+        if (half===0){
+          var mark=t.status==='cancelled'?'⊘':'▎';
+          segs.push(S(mark, statusColor(t.status)+(isSel?' hl':'')), S(fit('#'+t.id+' '+t.title, cw-1), isSel?'inv':''));
+        } else {
+          if (more && !isSel){ segs.push(S(fit('  +'+(col.items.length-(offsets[c]+MAXC-1))+' more', cw),'c-dim')); return; }
+          var pre = (t.status==='blocked'&&t.blocked.kind==='question') ? '? ' : overdue(t) ? '! ' : t.status==='review' ? '✓ ' : (t.status==='plan'&&t.awaiting) ? '◇ ' : '  ';
+          var preC = pre==='? '?'c-yellow':pre==='! '?'c-red':pre==='✓ '?'c-magenta':pre==='◇ '?'c-blue':'';
+          var meta=(t.agent||'queued')+' · '+etaShort(t);
+          segs.push(S(pre, preC+(isSel?' hl':'')), S(fit(meta, cw-2), isSel?'hl c-dim':'c-dim'));
+        }
+      });
+      lines.push(emit(segs));
+    }
+  }
+  lines.push(emit([S('')]));
+
+  // preview
+  if (sel){
+    var ttl=' #'+sel.id+' ';
+    lines.push(emit([S('──','c-rule'),S(ttl,'c-bold'),S(rep('─',W-2-ttl.length),'c-rule')]));
+    var ag=agentOf(sel.agent);
+    var meta2=' P'+sel.pri+' · '+(sel.eta?'eta '+dateLong(sel.eta)+' ('+rel(sel.eta)+')':'no eta')+' · '+(sel.agent?sel.agent+(ag?' · ctx '+ag.ctx+'%':''):'queued for the next free agent')+(sel.run?' · run '+sel.run:'')+(sel.usd?' · '+usd(sel.usd):'')+(sel.parent?' · part of #'+sel.parent:'')+(sel.umbrella?' · umbrella, status follows its sub-tasks':'');
+    lines.push(emit([S(' '+sel.title+'  ','c-bold'),S(statusLabel(sel), statusColor(sel.status)),S('  '+meta2.trim(),'c-dim')]));
+    var dl=wrap(sel.desc, W-4); for (var i=0;i<3;i++) lines.push(emit([S('  '+(dl[i]||''))]));
+    var act=[S('  ')], act2=null;
+    var q2=openQ(sel);
+    if (sel.status==='blocked' && sel.blocked.kind==='question' && q2){
+      var qt='? '+q2.from+' asks: '+q2.question+'  ·  if no answer: '+q2.dflt, ql=wrap(qt, W-36);
+      act.push(S(fit(ql[0], W-36),'c-yellow'));
+      act2=[S('  '),S(fit(ql[1]||'', W-36),'c-yellow'),S(sel.blocked.to==='you'?'  ⏎ for its context · r reply':'  waiting on '+who(sel.blocked.to),'c-dim')];
+    } else if (sel.status==='blocked' && sel.blocked.kind==='dependency'){
+      var dep=byId(sel.blocked.task);
+      act.push(S('⏸ waiting on #'+dep.id+' '+dep.title+' ('+statusLabel(dep)+(dep.agent?', '+dep.agent:', queued')+')','c-yellow'), S('  tell '+GM+' to start it, or m to assign','c-dim'));
+    } else if (sel.status==='review'){
+      var rl=wrap('✓ '+sel.agent+' reported: '+sel.result, W-42);
+      act.push(S(fit(rl[0], W-42),'c-magenta'));
+      act2=[S('  '),S(fit(rl[1]||'', W-42),'c-magenta'),S(sel.review==='you'?'  a approve · x send back with feedback':'  '+GM+' is reviewing · a to accept anyway','c-dim')];
+    } else if (sel.status==='plan' && sel.awaiting){
+      var pl=wrap('◇ plan by '+GM+', awaiting your approval: '+sel.notes.filter(function(n){return n.kind==='plan';}).map(function(n){return n.text;}).join(' '), W-36);
+      act.push(S(fit(pl[0], W-36),'c-blue'));
+      act2=[S('  '),S(fit(pl[1]||'', W-36),'c-blue'),S('  a approve · x send back  → '+(sel.agent||'next free agent'),'c-dim')];
+    } else if (sel.status==='in_progress' && sel.progress){
+      act.push(S(fit('▶ '+sel.agent+': '+sel.progress, W-40),'c-cyan'), S('  t transcript · o worktree '+sel.branch,'c-dim'));
+    } else if (sel.status==='in_progress' && sel.umbrella){
+      var kids=tasks.filter(function(t){return t.parent===sel.id;});
+      act.push(S('▶ '+kids.length+' sub-tasks: '+kids.map(function(k){return '#'+k.id+' '+k.status.replace('_',' ');}).join(' · '),'c-cyan'), S('  ⏎ for the dispatch tree','c-dim'));
+    } else if (sel.status==='done'){
+      var dn=wrap('✓ '+sel.result, W-30); act.push(S(fit(dn[0], W-30),'c-green'), S('  '+sel.branch,'c-dim'));
+    } else if (sel.deps && sel.deps.length){
+      act.push(S('· waits for '+sel.deps.map(function(d){var x=byId(d);return '#'+d+' ('+x.status.replace('_',' ')+')';}).join(', ')+(sel.agent?' · then '+sel.agent:' · then the next free agent'),'c-dim'));
+    } else {
+      act.push(S('· not started'+(sel.agent?' · assigned to '+sel.agent:' · queued for the next free agent — tell '+GM+', or m to assign'),'c-dim'));
+    }
+    lines.push(emit(act));
+    if (act2) lines.push(emit(act2));
+  } else {
+    lines.push(emit([S(rep('─',W),'c-rule')])); for (var k=0;k<5;k++) lines.push(emit([S(k===1?'  no tasks match':'', 'c-dim')]));
+  }
+  return lines;
+}
+
+function footer(){
+  if (state.mode==='reply'){ var t=byId(state.selId), q=openQ(t); return emit([S('  reply to '+q.from+' on #'+t.id+' › ','c-yellow'),S(state.input+'▏'),S('   ⏎ send · esc cancel','c-dim')]); }
+  if (state.mode==='reject'){ return emit([S('  send #'+state.selId+' back with feedback › ','c-magenta'),S(state.input+'▏'),S('   ⏎ send · esc cancel','c-dim')]); }
+  if (state.mode==='note'){ return emit([S('  note on #'+state.selId+' › ','c-cyan'),S(state.input+'▏'),S('   ⏎ save · esc cancel','c-dim')]); }
+  if (state.mode==='filter'){ return emit([S('  filter › ','c-cyan'),S(state.filter+'▏'),S('   type text or #id · ⏎ keep · esc clear','c-dim')]); }
+  if (state.mode==='confirm'){ return emit([S('  cancel #'+state.selId+'? the agent stops and the worktree is kept  ','c-red'),S('y confirm · any other key aborts','c-dim')]); }
+  if (state.view==='detail') return emit([S('  r reply  a approve  x reject  n note  m reassign  p priority  e eta  t transcript  o open worktree  c cancel  esc back','c-dim')]);
+  return emit([S('  ↑↓←→ move  ⏎ details  g group  s sort  d done  / filter  r reply  a approve  x reject  n note  p priority  c cancel  K pause all  q quit','c-dim')]);
+}
+
+// ---------- detail ----------
+function renderDetail(){
+  var t=byId(state.selId), L=[];
+  var ag=agentOf(t.agent);
+  var head=[S(' ← esc  ','c-dim'),S('#'+t.id+' '+t.title,'c-bold')]; var st=statusLabel(t);
+  L.push(emit(head.concat([S(rep(' ',Math.max(1,W-vis(head)-st.length-2))),S(st, statusColor(t.status)+' c-bold')])));
+  L.push(emit([S(rep('─',W),'c-rule')]));
+  L.push(emit([S(' P'+t.pri+' · '+(t.eta?'eta '+dateLong(t.eta)+' ('+rel(t.eta)+')':'no eta')+' · created '+hm(t.created)+' by '+GM+(t.ask?' from your ask: ':''),'c-dim'),S(t.ask?fit('“'+t.ask+'”', W-60):'')]));
+  if (t.parent){ var p=byId(t.parent); L.push(emit([S(' part of #'+p.id+' '+p.title+' · your ask: ','c-dim'),S(fit('“'+(p.ask||'')+'”', W-50))])); }
+  var agl = t.agent ? ' '+t.agent+' · Claude Code · '+ag.model+' · profile '+PROFILE.name+' ('+PROFILE.account+')'+(t.run?' · run '+t.run:'')+(t.tok!=='—'?' · '+t.tok+' tokens':'')+(t.usd?' · '+usd(t.usd)+' list-price':'')+' · ctx '+ag.ctx+'%'+(ag.compacting?' ↻ compacting':'') : ' queued for the next free agent';
+  L.push(emit([S(agl),S(t.branch!=='—'?'   · branch '+t.branch+' · worktree ~/.agent-manager/swarms/'+GM+'/wt/'+t.id:'','c-dim')]));
+  L.push(emit([S('')]));
+  L.push(emit([S(' DESCRIPTION','c-dim')]));
+  wrap(t.desc, W-6).slice(0,3).forEach(function(l){ L.push(emit([S('   '+l)])); });
+  L.push(emit([S(' DISPATCH','c-dim')]));
+  function nodeLine(prefix, x){ var a=agentOf(x.agent); return emit([S(prefix),S(fit('#'+x.id+' '+x.title, 58)),S(fit(x.agent?x.agent+(a?' · ctx '+a.ctx+'%':''):'queued', 26),'c-dim'),S(statusLabel(x), statusColor(x.status))]); }
+  L.push(nodeLine('   ', t));
+  var kids=tasks.filter(function(k){return k.parent===t.id;});
+  kids.forEach(function(k,i){ L.push(nodeLine('     '+(i===kids.length-1?'└─ ':'├─ '), k)); });
+  (t.deps||[]).forEach(function(d){ var x=byId(d); L.push(emit([S('     waits for   ','c-dim'),S(fit('#'+x.id+' '+x.title, 48)),S(fit(x.agent||'queued', 26),'c-dim'),S(statusLabel(x), statusColor(x.status))])); });
+  tasks.filter(function(x){return (x.deps||[]).indexOf(t.id)>=0;}).forEach(function(x){ L.push(emit([S('     unblocks    ','c-dim'),S(fit('#'+x.id+' '+x.title, 48)),S(fit(x.agent||'queued', 26),'c-dim'),S(statusLabel(x), statusColor(x.status))])); });
+  t.runs.forEach(function(r){ L.push(emit([S('   run '+r.n+'  ','c-dim'),S(hm(r.from)+' → '+(r.to?hm(r.to):'now')+'  '),S(fit(r.exit?r.exit:'working', 52), r.exit?(r.exit.indexOf('done')===0?'c-green':r.exit.indexOf('compacted')===0?'c-yellow':'c-yellow'):'c-cyan'),S('~/.agent-manager/swarms/'+GM+'/'+r.log,'c-dim')])); });
+  if (!t.runs.length && !kids.length) L.push(emit([S('   not started','c-dim')]));
+  L.push(emit([S(' NOTES','c-dim')]));
+  if (!t.notes.length) L.push(emit([S('   none yet · n to add','c-dim')]));
+  t.notes.slice(-3).forEach(function(n){ L.push(emit([S('   '+hm(n.at)+'  ','c-dim'),S(fit(n.by,13), n.by==='you'?'c-cyan':''),S(fit(n.kind,12), n.kind==='checkpoint'?'c-yellow':'c-dim'),S(fit(n.text, W-36))])); });
+  var q=openQ(t);
+  if (q){
+    L.push(emit([S(' QUESTION','c-dim'),S('  from '+q.from+' · '+hm(q.at)+' · went to task manager'+q.path.map(function(h){return ' → '+who(h.to);}).join(''),'c-dim')]));
+    var lab=function(k,txt,c){ var ls=wrap(txt, W-26); ls.slice(0,2).forEach(function(l,i){ L.push(emit([S('   '+fit(i?'':k,20),'c-dim'),S(fit(l, W-26), c||'')])); }); };
+    lab('About', q.about); lab('Known', q.known); lab('Question', q.question, 'c-yellow');
+    if (q.options && q.options.length) lab('Options', q.options.join('   '));
+    lab('If no answer', q.dflt);
+    q.path.forEach(function(h){ if (h.to==='you') lab(GM+"'s view", h.note); else lab(who(h.to), h.note); });
+    L.push(emit([S('   '+fit('',20)),S(t.blocked&&t.blocked.to==='you'?'r reply':'waiting on '+who(t.blocked?t.blocked.to:'tm'),'c-yellow')]));
+  } else {
+    L.push(emit([S(' QUESTIONS','c-dim')]));
+    if (!t.qs.length) L.push(emit([S('   none','c-dim')]));
+  }
+  t.qs.filter(function(x){return x.answer;}).slice(-2).forEach(function(x){ L.push(emit([S('   '+hm(x.at)+'  ','c-dim'),S(fit(x.from+' asked: '+x.question, 70)),S(fit('→ '+x.answeredBy+' answered '+(x.answeredAt?'at '+hm(x.answeredAt):'')+': '+x.answer, W-84),'c-green')])); });
+  var tl=[S(' TIMELINE  ','c-dim')]; t.events.slice(0,6).forEach(function(e,i){ if (i) tl.push(S('   ·   ','c-rule')); tl.push(S(hm(e.at)+' ','c-dim'),S(e.text)); });
+  L.push(emit(tl));
+  return L;
+}
+
+function render(){
+  var lines = state.view==='detail' && state.selId ? renderDetail() : renderBoard();
+  lines = lines.slice(0, ROWS-2);
+  while (lines.length<ROWS-2) lines.push(emit([S('')]));
+  lines.push(emit([S(state.toast?'  '+state.toast:'', 'c-green')]));
+  lines.push(footer());
+  document.getElementById('screen').innerHTML = lines.join('\n');
+}
+
+// ---------- actions ----------
+function move(dc, dr){
+  var cols=groups(), pos=ensureSel(cols); if (!pos) return;
+  if (dr){ var col=cols[pos.c], r=Math.max(0, Math.min(col.items.length-1, pos.r+dr)); state.selId=col.items[r].id; }
+  if (dc){ var c=pos.c; do { c+=dc; } while (c>=0 && c<cols.length && !cols[c].items.length); if (c<0||c>=cols.length) return; var rr=Math.min(pos.r, cols[c].items.length-1); state.selId=cols[c].items[rr].id; }
+}
+var LATER = new Date(NOW.getTime()+60000);
+function bump(t){ t.updated=LATER; }
+function addEvent(t, text){ t.events.unshift({at:LATER, text:text}); }
+function firstIdle(){ for (var i=0;i<TEAM.length;i++) if (agentState(TEAM[i]).state==='idle') return TEAM[i]; return null; }
+function submit(){
+  var t=byId(state.selId), text=state.input.trim();
+  if (!text){ state.mode='normal'; state.input=''; return; }
+  if (state.mode==='reply'){
+    var q=openQ(t); q.answer=text; q.answeredBy='you'; q.answeredAt=LATER;
+    t.notes.push({at:LATER, by:'you', kind:'decision', text:text});
+    t.status=t.resumeTo||'in_progress'; t.blocked=null; t.run+=1;
+    t.runs.forEach(function(r){ if (!r.to){ r.to=LATER; } }); t.runs.push({n:t.run, from:LATER, to:null, exit:null, log:'runs/r-'+t.id+'-'+t.run+'.log'});
+    t.progress='resumed with your answer'; addEvent(t,'you answered · note added · run '+t.run+' (resumed)'); bump(t);
+    toast('answer saved as a note on #'+t.id+' · '+t.agent+' resumed with it (run '+t.run+') · '+GM+' can see it too');
+  } else if (state.mode==='reject'){
+    t.notes.push({at:LATER, by:'you', kind:'decision', text:'Sent back: '+text});
+    if (t.status==='review'){ t.status='in_progress'; t.review=null; t.run+=1; t.runs.push({n:t.run, from:LATER, to:null, exit:null, log:'runs/r-'+t.id+'-'+t.run+'.log'}); t.progress='working on your feedback'; addEvent(t,'sent back by you · run '+t.run+' (resumed with feedback)'); toast('#'+t.id+' back to in progress · '+t.agent+' resumed with your feedback'); }
+    else { addEvent(t,'plan sent back by you'); toast('plan on #'+t.id+' sent back to '+GM+' with your note'); }
+    bump(t);
+  } else if (state.mode==='note'){
+    t.notes.push({at:LATER, by:'you', kind:'context', text:text}); addEvent(t,'note by you'); bump(t); toast('note added to #'+t.id+' · visible to '+GM+' and '+(t.agent||'whoever takes it'));
+  }
+  state.mode='normal'; state.input='';
+}
+function approve(t){
+  if (t.status==='review'){ t.status='done'; t.result=t.result||'accepted'; addEvent(t, t.review==='you'?'accepted by you':'accepted by you (skipped '+GM+"'s pass)"); t.review=null; bump(t); toast('#'+t.id+' done · '+(t.branch!=='—'?t.branch+' ready to merge · ':'')+t.agent+' is free for the next queued task'); return; }
+  if (t.status==='plan' && t.awaiting){
+    var a = t.agent ? agentOf(t.agent) : firstIdle();
+    if (!a || agentState(a).state!=='idle'){ a=firstIdle(); }
+    if (!a){ t.awaiting=false; t.status='open'; addEvent(t,'plan approved by you · queued for the next free agent'); bump(t); toast('plan approved · #'+t.id+' is queued; every agent is busy'); return; }
+    t.awaiting=false; t.status='in_progress'; t.agent=a.name; t.run=1; t.runs.push({n:1, from:LATER, to:null, exit:null, log:'runs/r-'+t.id+'-1.log'}); t.progress='starting from the approved plan'; t.branch='swarm/'+t.id+'-quota-spread'; addEvent(t,'plan approved by you · assigned → '+a.name); bump(t);
+    toast('plan approved · #'+t.id+' assigned to '+a.name+', who was idle · brief includes the plan and the workspace'); return; }
+  toast('nothing to approve on #'+t.id+' ('+statusLabel(t)+')');
+}
+function handle(key){
+  var t=state.selId?byId(state.selId):null;
+  if (state.mode==='filter'){
+    if (key==='Escape'){ state.filter=''; state.mode='normal'; }
+    else if (key==='Enter'){ state.mode='normal'; }
+    else if (key==='Backspace'){ state.filter=state.filter.slice(0,-1); }
+    else if (key.length===1){ state.filter+=key; }
+    render(); return;
+  }
+  if (state.mode==='reply'||state.mode==='reject'||state.mode==='note'){
+    if (key==='Escape'){ state.mode='normal'; state.input=''; }
+    else if (key==='Enter'){ submit(); }
+    else if (key==='Backspace'){ state.input=state.input.slice(0,-1); }
+    else if (key.length===1){ state.input+=key; }
+    render(); return;
+  }
+  if (state.mode==='confirm'){
+    state.mode='normal';
+    if (key==='y' && t){ t.status='cancelled'; t.blocked=null; t.review=null; t.runs.forEach(function(r){ if(!r.to){ r.to=LATER; r.exit='cancelled'; } }); addEvent(t,'cancelled by you'); bump(t); toast('#'+t.id+' cancelled · '+(t.agent?t.agent+' stopped · ':'')+'worktree kept until you purge it'); }
+    else toast('not cancelled');
+    render(); return;
+  }
+  switch (key){
+    case 'ArrowUp': if (state.view==='board') move(0,-1); break;
+    case 'ArrowDown': if (state.view==='board') move(0,1); break;
+    case 'ArrowLeft': if (state.view==='board') move(-1,0); break;
+    case 'ArrowRight': if (state.view==='board') move(1,0); break;
+    case 'Enter': if (state.view==='board' && t) state.view='detail'; break;
+    case 'Escape': if (state.view==='detail') state.view='board'; else if (state.filter){ state.filter=''; } break;
+    case 'q': if (state.view==='detail') state.view='board'; else toast('in the real board q quits; the team keeps working'); break;
+    case 'g': state.group = state.group==='status'?'agent':state.group==='agent'?'eta':'status'; break;
+    case 's': state.sort = state.sort==='priority'?'eta':state.sort==='eta'?'updated':state.sort==='updated'?'id':'priority'; break;
+    case 'd': state.showDone=!state.showDone; break;
+    case '/': if (state.view==='board'){ state.mode='filter'; } break;
+    case 'r': if (!t) break; if (t.status==='blocked' && t.blocked.kind==='question'){ if (t.blocked.to==='you') state.mode='reply'; else toast('#'+t.id+' is waiting on '+who(t.blocked.to)+' — it reaches you only if they cannot answer'); } else toast('no open question on #'+t.id); break;
+    case 'a': if (t) approve(t); break;
+    case 'x': if (!t) break; if (t.status==='review' || (t.status==='plan'&&t.awaiting)) state.mode='reject'; else toast('nothing to send back on #'+t.id); break;
+    case 'n': if (t) state.mode='note'; break;
+    case 'p': if (t){ t.pri=(t.pri+1)%4; addEvent(t,'priority → P'+t.pri+' by you'); bump(t); toast('#'+t.id+' priority P'+t.pri); } break;
+    case 'c': if (t && active(t)) state.mode='confirm'; else if (t) toast('#'+t.id+' is already '+t.status); break;
+    case 'K': toast('pause all: would pause every agent after a y/n confirm — not wired in this mock'); break;
+    case 'm': case 'e': case 't': case 'o': case 'v': toast('‘'+key+'’ is specified below but not wired in this mock'); break;
+    default: return;
+  }
+  render();
+}
+
+// ---------- wiring ----------
+var tui=document.getElementById('tui');
+tui.addEventListener('keydown', function(e){
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  var k=e.key;
+  var handled = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape','Backspace'].indexOf(k)>=0 || k.length===1;
+  if (!handled) return;
+  e.preventDefault(); handle(k);
+});
+var screenEl=document.getElementById('screen');
+function cellAt(ev){
+  var cs=getComputedStyle(screenEl), r=screenEl.getBoundingClientRect();
+  var padL=parseFloat(cs.paddingLeft), padT=parseFloat(cs.paddingTop), padR=parseFloat(cs.paddingRight), padB=parseFloat(cs.paddingBottom);
+  var chW=(screenEl.scrollWidth-padL-padR)/W, lnH=(screenEl.scrollHeight-padT-padB)/ROWS;
+  return {col:Math.floor((ev.clientX-r.left+screenEl.scrollLeft-padL)/chW), row:Math.floor((ev.clientY-r.top+screenEl.scrollTop-padT)/lnH)};
+}
+function cardAt(ev){
+  if (state.view!=='board' || !layout) return null;
+  var c=cellAt(ev), x=c.col-2, r=c.row-layout.firstCardRow;
+  if (x<0 || r<0 || r>=layout.maxc*2) return null;
+  var ci=Math.floor(x/(layout.cw+layout.gap)); if (x-ci*(layout.cw+layout.gap)>=layout.cw) return null;
+  var col=layout.cols[ci]; if (!col) return null;
+  return col.items[Math.floor(r/2)+layout.offsets[ci]]||null;
+}
+var lastWheel=0;
+tui.addEventListener('wheel', function(e){
+  if (state.view!=='board' || Math.abs(e.deltaY)<4) return;
+  e.preventDefault();
+  var now=Date.now(); if (now-lastWheel<90) return; lastWheel=now;
+  var t=cardAt(e); if (t && t.id!==state.selId){ state.selId=t.id; }
+  move(0, e.deltaY>0?1:-1); render();
+}, {passive:false});
+tui.addEventListener('click', function(e){
+  if (state.mode!=='normal') return;
+  var t=cardAt(e); if (t){ state.selId=t.id; render(); }
+});
+tui.addEventListener('dblclick', function(e){
+  if (state.mode!=='normal') return;
+  var t=cardAt(e); if (t){ state.selId=t.id; state.view='detail'; render(); }
+});
+tui.addEventListener('focus', function(){ tui.classList.add('is-focused'); });
+tui.addEventListener('blur', function(){ tui.classList.remove('is-focused'); });
+document.getElementById('keypad').addEventListener('click', function(e){
+  var b=e.target.closest('button'); if (!b) return;
+  if (b.id==='reset'){ reset(); tui.focus(); return; }
+  handle(b.getAttribute('data-key')); tui.focus();
+});
+reset();
+})();
+</script>
