@@ -12,12 +12,17 @@ active and what it is costing you.
   codex    codex    Pro      you@company.com      1w ░░░░░░░░   1%                     4.5M    14h ago
 ```
 
+Full instructions, from install to day-to-day use of the team: **[docs/GUIDE.md](docs/GUIDE.md)**.
+
 ## Install
 
+Node.js 18+, git, and the Claude Code CLI (`claude`); Codex (`codex`) only for Codex profiles.
+
 ```sh
-npm install -g agent-manager     # provides `am`
-# or run without installing:
-npx agent-manager status
+git clone https://github.com/royliu/agent-manager.git
+cd agent-manager && npm install && npm run build
+npm install -g .                 # provides `am` (or `npm link` while developing)
+am --version
 ```
 
 ## Quick start
@@ -90,35 +95,48 @@ charged — on a subscription it's the value your plan absorbed.
 
 ## A team of agents per project: `am start`
 
-`am` can also run a swarm on your profiles. In a project folder:
+`am` can also run a team of agents on your profiles. Step by step:
+
+**1. Start a General Manager in a project folder.**
 
 ```sh
+cd ~/Projects/genie
 am start personal gm friday     # personal = any Claude Code or Codex profile; the name is yours
 ```
 
 That sets up a **task manager** and **four task agents** (`friday-1` … `friday-4`) on the
 `personal` profile, captures the workspace you are standing in (folder, branch, your shell
 environment with API keys stripped), and hands the terminal to Claude Code running as
-**Friday**, the General Manager. You talk to Friday in plain language; it discusses, breaks
-work into tasks with short ids (`#12`), assigns them, and reviews what comes back.
+**Friday**, the General Manager.
 
-In another terminal:
+**2. Talk to Friday.** Plain language, as you would brief a lead engineer. Friday discusses
+first, then proposes the tasks it would create and waits for your "go". Tasks get short ids
+(`#12`), an owner and an ETA; independent parts go to different agents at the same time.
+
+**3. Watch the board in another terminal.**
 
 ```sh
-am tasks                        # the board: kanban when wide, a list when narrow
+am tasks                        # kanban when wide, a list when narrow; keys shown on screen
 ```
+
+**4. Answer and approve as things come up.** Agents' questions go to the task manager, which
+answers most of them itself. What reaches you shows as "needs you" on the board: `r` to
+reply, `a` to accept finished work, `x` to send it back or stop it. Or just tell Friday.
+
+**5. Come and go.** Close the terminal any time; the team keeps working. `am gm` reopens
+Friday's conversation, `am stop` ends the team, and the board is kept either way.
 
 You see two things: Friday and the board. Everything else is Friday's business.
 
 | Command | Does |
 |---|---|
-| `am start <profile> gm [name] [--agents N]` | create or resume a General Manager in this folder |
+| `am start <profile> gm [name] [--agents N] [--gm-model\|--tm-model\|--agent-model <m>]` | create or resume a General Manager in this folder; model flags are remembered for this GM |
 | `am gm` · `am gm ls` | come back to Friday's conversation · list every GM |
 | `am tasks [name] [--group status\|agent\|eta] [--json]` | the board, live |
 | `am task show\|add\|note\|answer\|approve\|reject\|cancel\|retry\|reassign\|dispatch #id …` | act on a task from the shell |
 | `am agent ls\|add\|rm\|move` | the team (add an agent on another profile: `am agent add --profile work`) |
 | `am stop [name]` | stop the team and task manager; the board is kept |
-| `am config swarm.<key> [value]` | `agents` `dispatch` `triage` `triageModel` `notify` `stallAfterMin` `compactAt` `agentModel` `codexAgentModel` `budgetUsd` |
+| `am config swarm.<key> [value]` | for every GM: `gmModel` `tmModel` `agentModel` `codexAgentModel` `agents` `dispatch` `triage` `notify` `stallAfterMin` `compactAt` `budgetUsd` (`default` clears) |
 
 **Board keys.** `↑↓←→` move · `⏎` open a task · `g` group by status, agent or ETA · `s` sort ·
 `d` hide done · `/` filter · `r` reply to a question · `a` approve · `x` send back with
@@ -147,10 +165,16 @@ worktree is its own folder and can have its own GM.
 Where things live: `~/.agent-manager/swarms/<name>/` holds the tasks, notes, events, the
 team, the workspace brief and the agents' run logs; `swarms.json` maps names to folders.
 
-Models: the GM runs on the profile's default model; every other agent, the four task agents
-and the task manager, runs on Opus by default (`swarm.agentModel`, `swarm.triageModel`).
-Codex agents work through the same tools; give them a model with `swarm.codexAgentModel`
-or leave the tool's default. Compaction: `am` asks the tool to compact
+Models: three groups, each yours to set: the GM, the task manager, and the task agents.
+By default all three run on the profile's own model (the `model` in that profile's Claude
+Code settings, or Codex config). Change one for every GM with `am config swarm.gmModel`,
+`swarm.tmModel` or `swarm.agentModel`; for one GM with `am start … --gm-model`, `--tm-model`
+or `--agent-model` (remembered for that GM); or just ask Friday, who has a tool for it and
+changes models only when you ask. `default` puts a group back on the profile's model.
+`am agent ls` and Friday's team list show what everyone runs on. A new GM model applies when
+you next open the conversation; the task manager's at its next answer; the agents' at their
+next run. Agents on Codex profiles have their own key, `codexAgentModel`, since Codex has its
+own model names. Compaction: `am` asks the tool to compact
 at `swarm.compactAt` where it exposes a setting (`swarm.compactEnv`), and independently
 watches each agent's context and drives the checkpoint-and-fresh-session step itself.
 

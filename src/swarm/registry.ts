@@ -53,8 +53,36 @@ export const SWARM_NAME_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 
 // ---- config: `am config swarm.<key> <value>` ----
 
+const CONFIG_ALIASES: Record<string, string> = { triageModel: 'tmModel' };
+const MODEL_KEYS = ['gmModel', 'tmModel', 'agentModel', 'codexAgentModel'];
+
+/** Raw file contents with old key names mapped to their current ones. */
+function rawSwarmConfig(): Record<string, unknown> {
+  let raw: Record<string, unknown> = {};
+  try {
+    raw = JSON.parse(fs.readFileSync(SWARM_CONFIG_FILE, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+  for (const [old, now] of Object.entries(CONFIG_ALIASES)) {
+    if (old in raw) {
+      if (!(now in raw)) raw[now] = raw[old];
+      delete raw[old];
+    }
+  }
+  return raw;
+}
+
 export function loadSwarmConfig(): SwarmConfig {
-  return readJson(SWARM_CONFIG_FILE, SwarmConfigSchema) ?? SwarmConfigSchema.parse({});
+  const parsed = SwarmConfigSchema.safeParse(rawSwarmConfig());
+  return parsed.success ? parsed.data : SwarmConfigSchema.parse({});
+}
+
+/** Every setting with its current value, unset optional ones included, for `am config`. */
+export function swarmConfigEntries(): Array<{ key: string; value: unknown; isModel: boolean; set: boolean }> {
+  const raw = rawSwarmConfig();
+  const cfg = loadSwarmConfig() as unknown as Record<string, unknown>;
+  return Object.keys(SwarmConfigSchema.shape).map((key) => ({ key, value: cfg[key], isModel: MODEL_KEYS.includes(key), set: key in raw }));
 }
 
 export function saveSwarmConfig(cfg: SwarmConfig): void {
@@ -63,16 +91,22 @@ export function saveSwarmConfig(cfg: SwarmConfig): void {
 }
 
 /** Parse a CLI string into the type the key expects. */
-export function setSwarmConfigKey(key: string, raw: string): SwarmConfig {
-  const cfg = loadSwarmConfig() as Record<string, unknown>;
+export function setSwarmConfigKey(keyArg: string, raw: string): SwarmConfig {
+  const key = CONFIG_ALIASES[keyArg] ?? keyArg;
+  const cfg = rawSwarmConfig();
   if (!(key in SwarmConfigSchema.shape)) {
     throw new Error(`unknown setting "swarm.${key}"; known: ${Object.keys(SwarmConfigSchema.shape).join(', ')}`);
   }
-  let value: unknown = raw;
-  if (/^-?\d+(\.\d+)?$/.test(raw)) value = Number(raw);
-  else if (raw === 'true' || raw === 'false') value = raw === 'true';
-  else if (raw.startsWith('[')) value = JSON.parse(raw);
-  cfg[key] = value;
+  // "default" (or "profile" for a model key) clears the setting, so the built-in or profile default applies again.
+  if (raw === 'default' || raw === '' || (MODEL_KEYS.includes(key) && raw === 'profile')) {
+    delete cfg[key];
+  } else {
+    let value: unknown = raw;
+    if (/^-?\d+(\.\d+)?$/.test(raw)) value = Number(raw);
+    else if (raw === 'true' || raw === 'false') value = raw === 'true';
+    else if (raw.startsWith('[')) value = JSON.parse(raw);
+    cfg[key] = value;
+  }
   const parsed = SwarmConfigSchema.safeParse(cfg);
   if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join('; '));
   saveSwarmConfig(parsed.data);

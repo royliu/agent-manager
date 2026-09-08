@@ -1,4 +1,5 @@
 import type { Agent, SwarmConfig, SwarmMeta, Task, Workspace } from './model.js';
+import { describeModel, type ModelsView } from './models.js';
 
 const PLAIN_ENGLISH = `Write in plain English for a colleague who has not seen this conversation. No jargon,
 abbreviations, protocol names or internal identifiers. The only shorthand allowed is task ids like #12,
@@ -14,15 +15,19 @@ export function questionShape(): string {
   default  what you will do if no answer arrives, and by when`;
 }
 
-export function gmSystemPrompt(meta: SwarmMeta, team: Agent[], ws: Workspace | undefined, cfg: SwarmConfig): string {
+export function gmSystemPrompt(meta: SwarmMeta, team: Agent[], ws: Workspace | undefined, cfg: SwarmConfig, models: ModelsView): string {
   const names = team.map((a) => a.name).join(', ');
+  const modelLine = `You run on ${describeModel(models.gm)}; the task manager on ${describeModel(models.tm)}; the task agents on ${describeModel(models.agent)}${models.codexAgent ? `; the agents on Codex on ${describeModel(models.codexAgent)}` : ''}.`;
   return `You are ${meta.name}, the General Manager of a small team of coding agents working in ${ws?.dir ?? meta.dir}.
 Refer to yourself as ${meta.name}. The person you talk to is the owner of this project.
 
 Your team: ${names}. Each agent is a persistent session on the ${meta.profile} profile that works on one task at a
-time and is idle between tasks. Agents run on the model the owner set for them (${cfg.agentModel ?? 'the profile default'} by default;
-the task manager on ${cfg.triageModel}); you run on the profile's default. You cannot change models: the owner does, with
-"am config swarm.agentModel <model>" or "am agent add --model". team_list shows each agent's model. A task manager keeps the board: every task with its id, status, notes, questions and
+time and is idle between tasks. ${modelLine}
+Unless the owner chose otherwise, every group runs on the profile's own default model. Change a model only when the owner
+asks: models_set changes it for this team ("default" goes back to the profile's model); the owner can also use
+"am config swarm.gmModel|tmModel|agentModel <model>" for every GM. A new model for you applies the next time the owner opens
+this conversation with "am gm"; for the task manager, at its next answer; for the agents, at their next run. team_list shows
+what everyone runs on. A task manager keeps the board: every task with its id, status, notes, questions and
 runs. The owner watches the board in another terminal with "am tasks" and can answer questions or approve work there;
 whatever they do there lands in the task's notes, so you will see it.
 

@@ -52,7 +52,7 @@ const RULES_NOTES = (gm: string) => `You are the task manager of ${gm}'s team. A
  */
 export function triageQuestion(
   profileHome: string,
-  model: string,
+  model: string | undefined,
   policy: 'notes' | 'most',
   ctx: TriageContext,
   q: Question,
@@ -102,7 +102,8 @@ default: ${q.default}`;
   }
   const sid = resume ? session.sessionId! : randomUUID();
   if (!resume) session.onNewSession(sid);
-  const args = ['-p', prompt, '--output-format', 'json', '--model', model, '--strict-mcp-config', '--permission-mode', 'plan', '--allowedTools', 'Read', 'Grep', 'Glob'];
+  const args = ['-p', prompt, '--output-format', 'json', '--strict-mcp-config', '--permission-mode', 'plan', '--allowedTools', 'Read', 'Grep', 'Glob'];
+  if (model) args.push('--model', model); // unset: the profile's own default model applies
   args.push(resume ? '--resume' : '--session-id', sid);
 
   return new Promise((resolve) => {

@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { Profile } from '../core/config.js';
 import { getProvider, type LaunchSpec } from '../providers/index.js';
 import { amEntry } from './client.js';
+import { profileByName } from '../core/config.js';
 import type { SwarmConfig, SwarmMeta } from './model.js';
+import { modelArg, modelsView } from './models.js';
 import { gmSystemPrompt } from './prompts.js';
 import { Store, writeJsonAtomic } from './store.js';
 import { findClaudeTranscript } from './transcript.js';
@@ -10,7 +12,9 @@ import { findClaudeTranscript } from './transcript.js';
 /** Build the interactive GM session: Claude Code (or Codex) with the swarm tools, hooks and status line. */
 export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfig, opts: { resume: boolean }): { spec: LaunchSpec; sessionId?: string } {
   const store = new Store(meta.name);
-  const prompt = gmSystemPrompt(meta, store.team(), store.workspace(), cfg);
+  const models = modelsView(meta, cfg, profile, store.team(), profileByName);
+  const gmModel = modelArg(models.gm);
+  const prompt = gmSystemPrompt(meta, store.team(), store.workspace(), cfg, models);
   const node = process.execPath;
   const cli = amEntry();
   const bridge = { command: node, args: [cli, 'mcp', '--swarm', meta.name, '--role', 'gm'] };
@@ -27,7 +31,7 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
       statusLine: { type: 'command', command: hook('status'), padding: 0 },
     });
     const args = ['--mcp-config', store.paths.mcpConfig, '--settings', store.paths.gmSettings, '--append-system-prompt', prompt];
-    if (cfg.gmModel) args.push('--model', cfg.gmModel);
+    if (gmModel) args.push('--model', gmModel);
     let sessionId: string | undefined;
     // Resume only a conversation that really exists on disk; otherwise start fresh rather than fail.
     const canResume = opts.resume && !!meta.gmSessionId && !!findClaudeTranscript(profile.home, meta.gmSessionId);
@@ -49,7 +53,7 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
     '-c', `mcp_servers.swarm.command=${toml(bridge.command)}`,
     '-c', `mcp_servers.swarm.args=[${bridge.args.map(toml).join(',')}]`,
   ];
-  if (cfg.gmModel) args.push('-m', cfg.gmModel);
+  if (gmModel) args.push('-m', gmModel);
   if (opts.resume && meta.gmSessionId) args.push('resume', meta.gmSessionId);
   else args.push(`${prompt}\n\nAt the start of every turn, read your inbox (inbox_read) before anything else. Introduce yourself to the owner in one short paragraph and ask what they want to get done.`);
   const spec = provider.launch(profile.home, args);

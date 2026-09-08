@@ -176,6 +176,13 @@ export const SwarmMetaSchema = z.object({
   gmSessionId: z.string().optional(),
   /** The task manager's own conversation, so its answers stay consistent over time. */
   tmSessionId: z.string().optional(),
+  /** Models set for this GM only (am start --gm-model …, or the GM's models_set); they beat the global swarm.*Model settings. */
+  models: z.object({
+    gm: z.string().optional(),
+    tm: z.string().optional(),
+    agent: z.string().optional(),
+    codexAgent: z.string().optional(),
+  }).optional(),
 });
 export type SwarmMeta = z.infer<typeof SwarmMetaSchema>;
 
@@ -184,15 +191,17 @@ export const SwarmConfigSchema = z.object({
   dispatch: z.enum(['propose', 'auto']).default('propose'),
   /** off: every question goes to the GM · notes: answer only what a note settles · most (default): the task manager reasons from the owner's intent and answers like the GM would, escalating only the rare judgment call. */
   triage: z.enum(['off', 'notes', 'most']).default('most'),
-  /** The task manager's model: Opus by default, since it reasons about the owner's intent and reads code. */
-  triageModel: z.string().default('opus'),
+  /** The task manager's model. Unset: the GM profile's own default model. */
+  tmModel: z.string().optional(),
   notify: z.boolean().default(true),
   stallAfterMin: z.number().default(15),
   compactAt: z.number().min(5).max(99).default(90),
   contextWindow: z.number().default(200_000),
-  /** Model for Claude Code task agents: Opus by default. Codex agents use codexAgentModel or the tool's default. */
-  agentModel: z.string().default('opus'),
+  /** Model for task agents on Claude Code profiles. Unset: each agent's profile default. */
+  agentModel: z.string().optional(),
+  /** Model for task agents on Codex profiles (Codex has its own model names). Unset: the profile default. */
   codexAgentModel: z.string().optional(),
+  /** The General Manager's model. Unset: the profile's own default model. */
   gmModel: z.string().optional(),
   permissionMode: z.string().default('acceptEdits'),
   allow: z.array(z.string()).default(['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash', 'WebFetch', 'WebSearch', 'mcp__swarm', 'mcp__swarm__*']),

@@ -2,9 +2,10 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { runForeground } from '../core/exec.js';
 import { getProvider, readIdentitySafe } from '../providers/index.js';
-import { ensureService } from '../swarm/client.js';
+import { ensureService, withClient } from '../swarm/client.js';
 import { buildGmLaunch } from '../swarm/gmlaunch.js';
 import type { Agent, SwarmMeta, Workspace } from '../swarm/model.js';
+import { modelsLines, normalizeModelValue, type ModelsView } from '../swarm/models.js';
 import { ensureSwarmDirs } from '../swarm/paths.js';
 import { findSwarm, loadSwarmConfig, realDir, saveSwarm, swarmForDir, SWARM_NAME_RE } from '../swarm/registry.js';
 import { Store } from '../swarm/store.js';
@@ -14,6 +15,10 @@ import { resolveProfile } from './resolve.js';
 
 interface StartOptions {
   agents?: string;
+  gmModel?: string;
+  tmModel?: string;
+  agentModel?: string;
+  codexAgentModel?: string;
   dir?: string;
   keepApiKeys?: boolean;
   dryRun?: boolean;
@@ -119,10 +124,22 @@ export async function startCommand(profileName: string, kind: string, nameArg: s
   }
 
   await ensureService(meta.name);
+  // Model flags are remembered for this GM; "default" clears one so the profile's model applies again.
+  const modelFlags: Record<string, string> = {};
+  for (const [flag, role] of [['gmModel', 'gm'], ['tmModel', 'tm'], ['agentModel', 'agent'], ['codexAgentModel', 'codexAgent']] as const) {
+    const raw = opts[flag];
+    if (raw !== undefined) modelFlags[role] = normalizeModelValue(raw) ?? '';
+  }
+  const models = await withClient(meta.name, async (c) => {
+    if (Object.keys(modelFlags).length) await c.call('models.set', { ...modelFlags, by: 'you' });
+    return c.call<ModelsView>('models.get');
+  });
+  meta = (swarmForDir(dir) ?? meta) as SwarmMeta;
   const store = new Store(meta.name);
   const team = store.team();
   const ws = store.workspace();
   console.log(`  ${green('✓')} task manager and ${team.length} task agent${team.length === 1 ? '' : 's'} ${fresh ? 'ready' : 'back'}: ${team.map((a) => a.name).join(' ')} ${dim(`(${fresh ? 'idle' : 'as they were'}, ${profile.name})`)}`);
+  console.log(`  ${green('✓')} models: ${modelsLines(models, meta.name).join(dim(' · '))}`);
   console.log(`  ${green('✓')} workspace: ${ws?.dir ?? dir}${ws?.branch ? ` · ${ws.branch}` : ''}${ws?.tools.node ? ` · node ${ws.tools.node.replace(/^v/, '')}` : ''} · your shell environment ${dim('(API keys stripped)')}`);
   console.log(`  ${dim(`▸ ${fresh ? 'starting' : 'resuming'} ${getProvider(profile.provider).displayName} as ${meta.name}… the board is`)} ${cyan('am tasks')} ${dim('in another terminal')}`);
   console.log('');

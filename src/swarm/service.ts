@@ -16,7 +16,8 @@ import { notifyDesktop } from './notify.js';
 import { agentBrief, gmSystemPrompt, resumeMessage } from './prompts.js';
 import type { Push, Request, Response } from './protocol.js';
 import { RpcError } from './protocol.js';
-import { loadSwarmConfig } from './registry.js';
+import { findSwarm, loadSwarmConfig, saveSwarm } from './registry.js';
+import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, resolveModel, ROLE_LABEL, windowFor, type ModelsView } from './models.js';
 import { Store, writeJsonAtomic } from './store.js';
 import { readClaudeSession } from './transcript.js';
 import { triageQuestion } from './triage.js';
@@ -73,8 +74,10 @@ export interface BoardSnapshot {
   meta: SwarmMeta;
   config: SwarmConfig;
   workspace?: Workspace;
-  team: Agent[];
+  team: Array<Agent & { effectiveModel?: string }>;
   tasks: Task[];
+  /** Which model each group runs on, and where that choice came from. */
+  models: ModelsView;
   inboxUnread: number;
   needYou: number;
   quota?: { profile: string; label: string; usedPercent: number; resetsAt?: number; plan?: string; account?: string };
@@ -387,6 +390,10 @@ export class TaskManagerService {
         return this.notice(str(p, 'agent'));
       case 'team.list':
         return this.store.team().map((a) => ({ ...a, effectiveModel: this.effectiveModel(a) }));
+      case 'models.get':
+        return this.models();
+      case 'models.set':
+        return this.setModels(p, str(p, 'by', false) || 'you');
       case 'team.add':
         return this.addAgent(str(p, 'name', false) || undefined, str(p, 'profile', false) || undefined, str(p, 'model', false) || undefined);
       case 'team.remove':
@@ -410,7 +417,7 @@ export class TaskManagerService {
         this.store.saveMeta(this.meta);
         return true;
       case 'gm.prompt':
-        return gmSystemPrompt(this.meta, this.store.team(), this.store.workspace(), this.cfg);
+        return gmSystemPrompt(this.meta, this.store.team(), this.store.workspace(), this.cfg, this.models());
       case 'config.reload':
         this.cfg = loadSwarmConfig();
         return this.cfg;
@@ -428,13 +435,14 @@ export class TaskManagerService {
     const team = this.store.team();
     let gmContextPct: number | undefined;
     if (this.meta.gmSessionId && this.meta.provider === 'claude-code') {
-      gmContextPct = readClaudeSession(this.profile.home, this.meta.gmSessionId, this.windowFor(this.cfg.gmModel ?? this.profileDefaultModel(this.profile.name))).contextPct;
+      gmContextPct = readClaudeSession(this.profile.home, this.meta.gmSessionId, windowFor(resolveModel('gm', this.meta, this.cfg, this.profile).model, this.cfg.contextWindow)).contextPct;
     }
     return {
       meta: this.meta,
       config: this.cfg,
+      models: this.models(),
       workspace: this.store.workspace(),
-      team,
+      team: team.map((a) => ({ ...a, effectiveModel: this.effectiveModel(a) })),
       tasks,
       inboxUnread: this.store.inbox().filter((i) => !i.read).length,
       needYou: tasks.filter(needsYou).length,
@@ -670,7 +678,8 @@ export class TaskManagerService {
         .slice(0, 15);
       const asks = all.filter((x) => x.ask && isActive(x)).map((x) => ({ taskId: x.id, ask: x.ask! })).slice(-10);
       const activeTasks = all.filter(isActive).map((x) => ({ id: x.id, title: x.title, status: statusLabel(x, this.gm()), agent: x.agent }));
-      const r = await triageQuestion(this.profile.home, this.cfg.triageModel, this.cfg.triage, {
+      const tmModel = resolveModel('tm', this.meta, this.cfg, this.profile);
+      const r = await triageQuestion(this.profile.home, modelArg(tmModel), this.cfg.triage, {
         task: t,
         root: this.root(t),
         parent: t.parentId !== undefined ? this.store.get(t.parentId) : undefined,
@@ -685,7 +694,7 @@ export class TaskManagerService {
           this.meta.tmSessionId = sid;
           this.store.saveMeta(this.meta);
         },
-      }, this.windowFor(this.cfg.triageModel), this.cfg.compactAt);
+      }, windowFor(tmModel.model, this.cfg.contextWindow), this.cfg.compactAt);
       if (r && 'answer' in r) {
         this.event('task manager', `answered (${r.basis}): ${r.answer}`, id);
         this.answer(id, `${r.answer}${r.reasoning ? ` — ${r.reasoning}` : ''}`, 'task manager', q.id);
@@ -1263,29 +1272,44 @@ export class TaskManagerService {
     if (dirty) this.push({ event: 'team' });
   }
 
-  /** The model an agent actually runs on: its own, else the swarm default, else the profile's default. */
+  /** The model an agent actually runs on: its own, else the one set for this GM, else the global setting, else its profile's default. */
   effectiveModel(a: Agent): string | undefined {
-    if (a.provider === 'codex') return a.model ?? this.cfg.codexAgentModel;
-    return a.model ?? this.cfg.agentModel ?? this.profileDefaultModel(a.profile);
+    return a.model ?? resolveModel(agentRole(a), this.meta, this.cfg, profileByName(a.profile)).model;
   }
-  private profileDefaultModel(profileName: string): string | undefined {
-    const prof = profileByName(profileName);
-    if (!prof) return undefined;
-    try {
-      return (JSON.parse(fs.readFileSync(path.join(prof.home, 'settings.json'), 'utf8')) as { model?: string }).model;
-    } catch {
-      return undefined;
+  /** What to put on an agent's command line; unset means the tool applies the profile's own default. */
+  private agentModelArg(a: Agent): string | undefined {
+    return a.model ?? modelArg(resolveModel(agentRole(a), this.meta, this.cfg, profileByName(a.profile)));
+  }
+  models(): ModelsView {
+    return modelsView(this.meta, this.cfg, this.profile, this.store.team(), profileByName);
+  }
+  /** Set a model for one or more groups, for this GM only. Empty, "default" or "profile" clears a group. */
+  private setModels(p: Record<string, unknown>, by: string): ModelsView {
+    const fresh = this.store.meta() ?? this.meta;
+    const models: NonNullable<SwarmMeta['models']> = { ...(fresh.models ?? {}) };
+    const changes: string[] = [];
+    for (const role of MODEL_ROLES) {
+      if (!(role in p)) continue;
+      const v = normalizeModelValue(typeof p[role] === 'string' ? (p[role] as string) : undefined);
+      if (v) models[role] = v;
+      else delete models[role];
+      changes.push(`${ROLE_LABEL[role]} → ${v ?? 'profile default'}`);
     }
-  }
-  /** 1M-context variants are marked "[1m]" in Claude Code model names. */
-  private windowFor(model: string | undefined): number {
-    return model && /\[1m\]/i.test(model) ? 1_000_000 : this.cfg.contextWindow;
+    if (!changes.length) throw new RpcError('nothing to set: give gm, tm, agent or codexAgent');
+    fresh.models = Object.keys(models).length ? models : undefined;
+    this.meta.models = fresh.models;
+    this.store.saveMeta(fresh);
+    const reg = findSwarm(this.name);
+    if (reg) saveSwarm({ ...reg, models: fresh.models });
+    this.event(by, `models: ${changes.join('; ')}`);
+    this.push({ event: 'team' });
+    return this.models();
   }
   private stats(a: Agent, sessionId?: string) {
     if (!sessionId || a.provider !== 'claude-code') return undefined;
     const prof = profileByName(a.profile);
     if (!prof) return undefined;
-    return readClaudeSession(prof.home, sessionId, this.windowFor(this.effectiveModel(a)));
+    return readClaudeSession(prof.home, sessionId, windowFor(this.effectiveModel(a), this.cfg.contextWindow));
   }
 
   private sumUsage(t: Task): { tokens: number; usd: number } {
@@ -1401,7 +1425,7 @@ export class TaskManagerService {
         resume,
         mcpConfigPath: mcp.file,
         mcpCommand: mcp.command,
-        model: a.model ?? (a.provider === 'codex' ? this.cfg.codexAgentModel : this.cfg.agentModel),
+        model: this.agentModelArg(a),
         allow: this.cfg.allow,
         permissionMode: this.cfg.permissionMode,
         extraEnv: ws?.env ?? {},

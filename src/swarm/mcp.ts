@@ -1,5 +1,6 @@
 import { openClient, type TmClient } from './client.js';
 import type { Agent, InboxItem, Task } from './model.js';
+import { describeModel, modelsLines, type ModelsView } from './models.js';
 import { RpcError } from './protocol.js';
 import { statusLabel } from './service.js';
 
@@ -31,7 +32,8 @@ const GM_TOOLS: Tool[] = [
   { name: 'task_cancel', description: 'Cancel a task. A running agent is stopped; the worktree is kept.', inputSchema: S({ id: ID }, ['id']) },
   { name: 'task_list', description: 'The board in one screen: every task with status, agent, eta.', inputSchema: S({ all: b('include done and cancelled') }) },
   { name: 'task_get', description: 'Everything about one task: description, notes, questions, runs, timeline.', inputSchema: S({ id: ID }, ['id']) },
-  { name: 'team_list', description: 'The agents: state, current task, context use.', inputSchema: S({}) },
+  { name: 'team_list', description: 'The team: which model you, the task manager and each agent run on; each agent\'s state, current task and context use.', inputSchema: S({}) },
+  { name: 'models_set', description: 'Change which model a group runs on, for this team only, and only when the owner asks. Groups: gm (you), taskManager, agents (on Claude Code profiles), codexAgents (on Codex profiles). Give a model name the tool accepts ("opus", "sonnet", a full model id), or "default" to go back to the profile\'s own model. Your new model applies the next time the owner opens this conversation; the task manager\'s at its next answer; the agents\' at their next run.', inputSchema: S({ gm: s('model for you'), taskManager: s('model for the task manager'), agents: s('model for task agents on Claude Code profiles'), codexAgents: s('model for task agents on Codex profiles') }) },
   { name: 'workspace_update', description: "Record what the team should know: the project brief (the owner's goals, the design so far, what matters and what does not; the task manager reasons from it when answering the team), a branch change, conventions for agents, environment variables. Agents adapt at their next task.", inputSchema: S({ brief: s("the owner's intent and the design so far, kept current; replaces the previous brief"), branch: s(''), notes: s('plain-English conventions every agent should know'), env: { type: 'object', additionalProperties: { type: 'string' }, description: 'environment variables to set for agents' } }) },
   { name: 'inbox_read', description: 'Read and clear items the task manager left for you. "Needs you" items: a question it could not settle, a finished task to review, a stalled agent, a quota warning. "For awareness" items: questions it already answered; no action.', inputSchema: S({}) },
   { name: 'board_summary', description: 'Counts: what needs the owner, what is running, what is queued.', inputSchema: S({}) },
@@ -131,7 +133,20 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
       case 'task_cancel': { const t = await client.call<Task>('task.cancel', a); out = `#${t.id} cancelled.`; break; }
       case 'task_list': out = fmtList(await client.call<Task[]>('task.list'), gm, a.all === true); break;
       case 'task_get': out = fmtTask(await client.call<Task>('task.get', { id }), gm); break;
-      case 'team_list': { const team = await client.call<Array<Agent & { effectiveModel?: string }>>('team.list'); out = team.map((x) => `${x.name}: ${x.state}${x.taskId !== undefined ? ` on #${x.taskId}` : ''} · context ${x.contextPct}% · profile ${x.profile} · model ${x.effectiveModel ?? 'tool default'}`).join('\n'); break; }
+      case 'team_list': {
+        const team = await client.call<Array<Agent & { effectiveModel?: string }>>('team.list');
+        const models = await client.call<ModelsView>('models.get');
+        out = [`${gm} (you): ${describeModel(models.gm)}`, `task manager: ${describeModel(models.tm)}`, ...team.map((x) => `${x.name}: ${x.state}${x.taskId !== undefined ? ` on #${x.taskId}` : ''} · context ${x.contextPct}% · profile ${x.profile} · model ${x.effectiveModel ?? 'the tool default'}`)].join('\n');
+        break;
+      }
+      case 'models_set': {
+        const map: Record<string, string> = { gm: 'gm', taskManager: 'tm', agents: 'agent', codexAgents: 'codexAgent' };
+        const params: Record<string, unknown> = { by: gm };
+        for (const [k, role] of Object.entries(map)) if (typeof a[k] === 'string') params[role] = a[k];
+        const models = await client.call<ModelsView>('models.set', params);
+        out = `Set. ${modelsLines(models, gm).join(' · ')}. Your own change applies when the owner next opens this conversation with "am gm".`;
+        break;
+      }
       case 'workspace_update': { const ws = await client.call<{ dir: string; branch?: string; notes: string; brief: string }>('workspace.update', a); out = `Workspace: ${ws.dir}${ws.branch ? ` · branch ${ws.branch}` : ''}${ws.notes ? ` · conventions: ${ws.notes}` : ''}${ws.brief ? `\nProject brief recorded (${ws.brief.length} chars); the task manager will reason from it.` : ''}. Agents adapt at their next task.`; break; }
       case 'inbox_read': { const items = await client.call<InboxItem[]>('inbox.read', { ack: true }); out = items.length ? items.map((i) => `[${i.kind === 'info' || i.kind === 'context' ? 'for awareness' : 'needs you'} · ${i.kind}${i.taskId !== undefined ? ` #${i.taskId}` : ''}] ${i.text}`).join('\n\n') : 'Nothing new.'; break; }
       case 'board_summary': { const snap = await client.call<{ tasks: Task[]; team: Agent[]; needYou: number; inboxUnread: number }>('snapshot'); const running = snap.tasks.filter((t) => t.status === 'in_progress').length; const queued = snap.tasks.filter((t) => t.status === 'open' && t.dispatchRequested).length; out = `${snap.needYou} need the owner · ${running} running · ${queued} queued · ${snap.inboxUnread} unread for you · team: ${snap.team.map((x) => `${x.name} ${x.state}`).join(', ')}`; break; }

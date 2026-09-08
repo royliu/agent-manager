@@ -1,5 +1,6 @@
 import { withClient } from '../swarm/client.js';
 import type { Agent } from '../swarm/model.js';
+import { describeModel, type ModelsView } from '../swarm/models.js';
 import { resolveSwarmName } from '../swarm/registry.js';
 import { bold, cyan, dim, green, padEnd, red, yellow } from '../ui/format.js';
 import { noSwarm } from './gm.js';
@@ -12,7 +13,11 @@ export async function agentCommand(sub: string, arg: string | undefined, opts: {
       case 'ls':
       case 'list': {
         const team = await c.call<Array<Agent & { effectiveModel?: string }>>('team.list');
-        if (opts.json) return console.log(JSON.stringify(team, null, 2));
+        const models = await c.call<ModelsView>('models.get');
+        if (opts.json) return console.log(JSON.stringify({ models, team }, null, 2));
+        console.log('');
+        console.log(`  ${padEnd(bold(meta.name), 14)}${padEnd(dim('general manager'), 20)}${dim(describeModel(models.gm))}`);
+        console.log(`  ${padEnd(bold('task manager'), 14)}${padEnd(dim('answers the team'), 20)}${dim(describeModel(models.tm))}`);
         console.log('');
         console.log('  ' + padEnd(dim('AGENT'), 14) + padEnd(dim('STATE'), 12) + padEnd(dim('TASK'), 8) + padEnd(dim('CTX'), 6) + padEnd(dim('PROFILE'), 12) + dim('MODEL'));
         for (const a of team) {

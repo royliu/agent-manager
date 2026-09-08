@@ -587,7 +587,7 @@ function renderDetail(t: Task, snap: BoardSnapshot, W: number): string[] {
     const p = snap.tasks.find((x) => x.id === t.parentId);
     if (p) L.push(dim(` part of #${p.id} ${p.title}${p.ask ? ' · ask: ' : ''}`) + (p.ask ? fit(`“${p.ask}”`, Math.max(10, W - 50)) : ''));
   }
-  L.push(t.agent ? ` ${t.agent}${ag ? ` · ${ag.provider === 'codex' ? 'Codex' : 'Claude Code'}${ag.model ? ` · ${ag.model}` : ''} · profile ${ag.profile}` : ''}${t.runs.length ? ` · run ${t.runs.length}` : ''} · ${t.usage.tokens.toLocaleString()} tokens · ${usd(t.usage.usd)} list-price${ag ? ` · ctx ${ag.contextPct}%${ag.state === 'compacting' ? ' ↻ compacting' : ''}` : ''}` : dim(' no agent yet'));
+  L.push(t.agent ? ` ${t.agent}${ag ? ` · ${ag.provider === 'codex' ? 'Codex' : 'Claude Code'}${(ag.effectiveModel ?? ag.model) ? ` · ${ag.effectiveModel ?? ag.model}` : ''} · profile ${ag.profile}` : ''}${t.runs.length ? ` · run ${t.runs.length}` : ''} · ${t.usage.tokens.toLocaleString()} tokens · ${usd(t.usage.usd)} list-price${ag ? ` · ctx ${ag.contextPct}%${ag.state === 'compacting' ? ' ↻ compacting' : ''}` : ''}` : dim(' no agent yet'));
   if (t.branch) L.push(dim(` branch ${t.branch} · worktree ${t.worktree}`));
   L.push('');
   L.push(dim(' DESCRIPTION'));

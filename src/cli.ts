@@ -165,6 +165,10 @@ program
   .argument('<kind>', 'gm')
   .argument('[name]', 'a name for the General Manager, e.g. friday (defaults to the folder name)')
   .option('--agents <n>', 'number of task agents to create (default from swarm.agents)')
+  .option('--gm-model <model>', "the General Manager's model for this GM (default: the profile's model; \"default\" clears)")
+  .option('--tm-model <model>', "the task manager's model for this GM (default: the profile's model)")
+  .option('--agent-model <model>', "the task agents' model for this GM (default: each agent's profile model)")
+  .option('--codex-agent-model <model>', 'the model for task agents on Codex profiles (default: the profile model)')
   .option('--dir <path>', 'workspace folder (default: current folder)')
   .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
   .option('--dry-run', 'set everything up and print the command instead of starting the session')
@@ -233,7 +237,7 @@ program
 
 program
   .command('config')
-  .description('swarm settings: am config swarm.<key> [value]')
+  .description('swarm settings for every GM: am config swarm.<key> [value]  ("default" clears; models: gmModel tmModel agentModel)')
   .argument('[key]')
   .argument('[value]')
   .action(async (key, value) => {

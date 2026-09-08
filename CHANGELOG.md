@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 · 2026-09-08
+
+- Models are yours to set for each of the three groups: the General Manager (`swarm.gmModel`), the task manager (`swarm.tmModel`, formerly `triageModel`, which still works) and the task agents (`swarm.agentModel`; `codexAgentModel` for agents on Codex profiles). By default every group runs on the profile's own model; the Opus defaults from 0.5.3 are gone. `am config swarm.<key> default` clears a setting.
+- Per-GM models: `am start <profile> gm <name> --gm-model | --tm-model | --agent-model <model>` sets them for that GM only and remembers them; they beat the global settings. Friday has a `models_set` tool for the same thing, used only when you ask.
+- A full user guide, `docs/GUIDE.md`: install from source, profiles, starting a team, talking to the GM, the board and every key, questions and reviews, the team, models, every setting, several projects, costs, updating, troubleshooting. The README opens with a step-by-step and links to it.
+- `am start`, `am agent ls`, the board's task detail and Friday's team list show which model each group runs on and where the choice came from (set for this GM, set with `am config`, or the profile default). `am config` with no arguments lists every setting, unset ones included.
+
 ## 0.5.5 · 2026-09-07
 
 - `x` on a running or blocked task stops the work: the agent's process is ended and the task goes on hold; type feedback first and the agent is restarted on it instead. Same for `am task stop #id [feedback]` and Friday's `task_reject`. On a report or a plan `x` still sends it back with feedback.
