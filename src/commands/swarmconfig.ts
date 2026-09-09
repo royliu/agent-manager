@@ -1,4 +1,5 @@
 import { serviceRunning, TmClient } from '../swarm/client.js';
+import { modelNameNote } from '../swarm/models.js';
 import { listSwarms, publicConfigKey, setSwarmConfigKey, swarmConfigEntries } from '../swarm/registry.js';
 import { bold, cyan, dim, green, padEnd, red, width } from '../ui/format.js';
 
@@ -43,7 +44,12 @@ export async function configCommand(key: string | undefined, value: string | und
   }
   const result = setSwarmConfigKey(resolved.key, value);
   console.log(`  ${green('✓')} ${result.key} = ${result.value === undefined ? dim(result.isModel ? "unset → the profile's own model" : 'unset') : JSON.stringify(result.value)}`);
-  if (result.isModel) console.log(dim('  Applies at the next start: the GM when you next run am gm, the task manager at its next answer, agents at their next run.'));
+  if (result.isModel) {
+    const note = modelNameNote(typeof result.value === 'string' ? result.value : undefined);
+    if (note) console.log(dim(`  ${note}`));
+    console.log(dim('  Applies at the next start: the GM when you next run am gm, the task manager at its next answer, agents at their next run.'));
+  }
+  if (result.key === 'profile.agents') console.log(dim('  Applies to agents created from now on, unless a GM has its own setting (am gm start --agent-profile), which wins. Existing agents: am gm start <profile> <name> --agent-profile <p> moves the idle ones, or am agent move.'));
   for (const s of listSwarms()) {
     if (!serviceRunning(s.name)) continue;
     const c = new TmClient(s.name);

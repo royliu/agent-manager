@@ -5,7 +5,7 @@ import { getProvider, readIdentitySafe } from '../providers/index.js';
 import { ensureService, withClient } from '../swarm/client.js';
 import { buildGmLaunch } from '../swarm/gmlaunch.js';
 import type { Agent, SwarmMeta, Workspace } from '../swarm/model.js';
-import { modelsLines, normalizeModelValue, type ModelsView } from '../swarm/models.js';
+import { describeAgentProfile, modelNameNote, modelsLines, normalizeModelValue, resolveAgentProfile, type ModelsView } from '../swarm/models.js';
 import { ensureSwarmDirs } from '../swarm/paths.js';
 import { findSwarm, loadSwarmConfig, realDir, saveSwarm, swarmForDir, SWARM_NAME_RE } from '../swarm/registry.js';
 import { Store } from '../swarm/store.js';
@@ -21,6 +21,7 @@ interface StartOptions {
   tmModel?: string;
   agentModel?: string;
   codexAgentModel?: string;
+  agentProfile?: string;
   dir?: string;
   keepApiKeys?: boolean;
   dryRun?: boolean;
@@ -113,14 +114,23 @@ export async function startCommand(profileName: string, nameArg: string | undefi
       process.exitCode = 1;
       return;
     }
-    const newMeta: SwarmMeta = { name, dir, profile: profile.name, provider: profile.provider, createdAt: Date.now() };
+    const agentProfileFlag = normalizeModelValue(opts.agentProfile);
+    const newMeta: SwarmMeta = { name, dir, profile: profile.name, provider: profile.provider, createdAt: Date.now(), profiles: agentProfileFlag ? { agents: agentProfileFlag } : undefined };
+    // New agents go on the profile set for this GM, else for every GM, else the GM's own.
+    const agentProf = resolveProfile(resolveAgentProfile(newMeta, cfg).profile, { command: 'am gm start --agent-profile' });
+    if (!agentProf) return;
+    if (agentProf.provider !== 'claude-code' && agentProf.provider !== 'codex') {
+      console.error(`${red('✗')} ${agentProf.name} is a ${getProvider(agentProf.provider).displayName} profile; task agents need Claude Code or Codex.`);
+      process.exitCode = 1;
+      return;
+    }
     ensureSwarmDirs(name);
     const store = new Store(name);
     store.saveMeta(newMeta);
     const count = Math.max(1, Math.min(16, Number.parseInt(opts.agents ?? '', 10) || cfg.agents));
     const team: Agent[] = [];
     for (let i = 1; i <= count; i += 1) {
-      team.push({ name: `${name}-${i}`, profile: profile.name, provider: profile.provider, state: 'idle', contextPct: 0, memory: '', rotateSession: false, paused: false, usdToday: 0, nudges: 0 });
+      team.push({ name: `${name}-${i}`, profile: agentProf.name, provider: agentProf.provider, state: 'idle', contextPct: 0, memory: '', rotateSession: false, paused: false, usdToday: 0, nudges: 0 });
     }
     store.saveTeam(team);
     store.saveWorkspace(captureWorkspace(dir));
@@ -135,9 +145,17 @@ export async function startCommand(profileName: string, nameArg: string | undefi
     const raw = opts[flag];
     if (raw !== undefined) modelFlags[role] = normalizeModelValue(raw) ?? '';
   }
-  const models = await withClient(meta.name, async (c) => {
+  const { models, agentsProfile, moved, busy } = await withClient(meta.name, async (c) => {
     if (Object.keys(modelFlags).length) await c.call('models.set', { ...modelFlags, by: 'you' });
-    return c.call<ModelsView>('models.get');
+    let moved: string[] = [];
+    let busy: string[] = [];
+    // On a GM that already exists, --agent-profile moves the idle agents there now.
+    if (opts.agentProfile !== undefined && !fresh) {
+      const r = await c.call<{ moved: string[]; busy: string[] }>('profiles.set', { agents: normalizeModelValue(opts.agentProfile) ?? '', by: 'you' });
+      moved = r.moved;
+      busy = r.busy;
+    }
+    return { models: await c.call<ModelsView>('models.get'), agentsProfile: await c.call<{ profile: string; source: 'this GM' | 'am config' | 'profile' | 'tool default' }>('profiles.get'), moved, busy };
   });
   meta = (swarmForDir(dir) ?? meta) as SwarmMeta;
   const store = new Store(meta.name);
@@ -145,6 +163,10 @@ export async function startCommand(profileName: string, nameArg: string | undefi
   const ws = store.workspace();
   console.log(`  ${green('✓')} task manager and ${team.length} task agent${team.length === 1 ? '' : 's'} ${fresh ? 'ready' : 'back'}: ${team.map((a) => a.name).join(' ')} ${dim(`(${fresh ? 'idle' : 'as they were'}, ${profile.name})`)}`);
   console.log(`  ${green('✓')} models: ${modelsLines(models, meta.name).join(dim(' · '))}`);
+  for (const note of [modelNameNote(models.gm.model), modelNameNote(models.tm.model), modelNameNote(models.agent.model)].filter((n, i, all): n is string => !!n && all.indexOf(n) === i)) console.log(`    ${dim(note)}`);
+  if (agentsProfile.source !== 'profile' || moved.length || busy.length) {
+    console.log(`  ${green('✓')} task agents on profile ${describeAgentProfile(agentsProfile)}${moved.length ? dim(` · moved ${moved.join(', ')}`) : ''}${busy.length ? ` ${dim(`· ${busy.join(', ')} still working, move later with`)} ${cyan('am agent move')}` : ''}`);
+  }
   console.log(`  ${green('✓')} workspace: ${ws?.dir ?? dir}${ws?.branch ? ` · ${ws.branch}` : ''}${ws?.tools.node ? ` · node ${ws.tools.node.replace(/^v/, '')}` : ''} · your shell environment ${dim('(API keys stripped)')}`);
   if (opts.open === false) {
     console.log(`  ${dim(`▸ ${meta.name}'s team is running in the background.`)} ${cyan(`am gm ${meta.name}`)} ${dim('opens the conversation ·')} ${cyan(`am board ${meta.name}`)} ${dim('the board')}`);

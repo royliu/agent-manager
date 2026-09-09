@@ -46,7 +46,7 @@ cd agent-manager
 npm install
 npm run build
 npm install -g .          # puts `am` on your PATH (or `npm link` while developing)
-am --version              # 0.7.0
+am --version              # 0.8.0
 ```
 
 `am init` (next section) offers to install the shell hook, which lets `am profile use` switch
@@ -140,6 +140,7 @@ Options on `am gm start`:
 |---|---|
 | `--agents N` | create N task agents instead of the default 4 (`team.size`) |
 | `--gm-model`, `--tm-model`, `--agent-model <model>` | models for this GM only, remembered (see [Models](#8-models)) |
+| `--agent-profile <profile>` | the profile the task agents run on, any Claude Code or Codex profile; remembered (see [The team](#7-the-team)) |
 | `--dir <path>` | use another folder as the workspace |
 | `--no-open` | start the team in the background and return; `am gm` opens the conversation later |
 | `--dry-run` | set everything up and print the command instead of starting the session |
@@ -313,15 +314,22 @@ Add `--gm <name>` when you are not in the GM's folder, `--json` for machine outp
 am agent ls                          # who runs on what, state, task, context use
 am agent add                         # one more agent on the GM's profile (friday-5)
 am agent add --profile work          # an agent on another profile (another subscription)
-am agent add fast --model sonnet     # a named agent pinned to a model
+am agent add fast --model claude-sonnet-5   # a named agent pinned to a model
 am agent rm friday-5
 am agent move friday-2 --profile work
 ```
 
-Agents on another profile are the way to spread work across two subscriptions: the GM and
-the task manager stay on one, some agents run on the other. Codex profiles work too; Codex
-agents use the same task tools, and have their own model setting because Codex has its own
-model names. Note that Codex has been exercised less than Claude Code here.
+**A profile for the whole team.** Rather than moving agents one by one, set the profile the
+task agents run on. For one GM, remembered: `am gm start personal friday --agent-profile codex`;
+on a GM that already exists this moves the idle agents there now and names any agent that is
+mid-task, which you move later with `am agent move`. For every GM: `am config profile.agents
+codex`, which applies to agents created from then on. Or tell Friday, who changes it only when
+you ask. The GM and the task manager stay on the GM's profile.
+
+This is how you spread work across subscriptions or tools: Friday on your Claude Max plan, the
+task agents on a Codex plan. Codex agents use the same task tools and have their own model
+setting, `model.codex-agents`, because Codex has its own model names. Codex has been exercised
+less than Claude Code here.
 
 The number of agents a new GM starts with is `team.size` (default 4), or `--agents N`.
 
@@ -331,19 +339,30 @@ Three groups, each yours to set:
 
 | Group | Setting for every GM | For one GM only |
 |---|---|---|
-| General manager | `am config model.gm opus` | `am gm start personal friday --gm-model opus` |
-| Task manager | `am config model.tm opus` | `--tm-model opus` |
-| Task agents | `am config model.agents opus` | `--agent-model opus` |
-| Task agents on Codex | `am config model.codex-agents <name>` | `--codex-agent-model <name>` |
+| General manager | `am config model.gm claude-fable-5-1` | `am gm start personal friday --gm-model claude-fable-5-1` |
+| Task manager | `am config model.tm claude-opus-5` | `--tm-model claude-opus-5` |
+| Task agents | `am config model.agents claude-opus-5` | `--agent-model claude-opus-5` |
+| Task agents on Codex | `am config model.codex-agents gpt-5.6-sol` | `--codex-agent-model gpt-5.6-sol` |
+| Task agents' profile | `am config profile.agents codex` | `--agent-profile codex` |
 
 By default every group runs on the profile's own model: the `model` in that profile's
 Claude Code `settings.json`, or Codex `config.toml`, or the tool's built-in default when
 neither is set. A setting for one GM beats the global one. `default` puts a group back on
 the profile's model: `am config model.tm default`, or `--tm-model default`.
 
-Model names are whatever the tool accepts: `opus`, `sonnet`, a full id such as
-`claude-fable-5-1[1m]`. The `[1m]` suffix also tells `am` the model has a 1M context window,
-so the 90% line is measured against the right size.
+Name models by their official ids: `claude-fable-5-1`, `claude-opus-5`, `claude-sonnet-5`,
+`claude-haiku-4-5-20251001`; for Codex profiles the id Codex accepts, such as `gpt-5.6-sol`.
+Short aliases like `opus` are accepted but float: the tool maps them to whichever version it
+currently ships, so `am` reminds you of the official id when you use one. A `[1m]` suffix on a
+Claude id, as in `claude-fable-5-1[1m]`, selects the 1M-context variant and tells `am` to
+measure the 90% line against that window.
+
+**Putting it together.** Friday on Fable, the task manager on Opus, the task agents on your
+Codex subscription, each on its own plan:
+
+```sh
+am gm start personal friday --gm-model claude-fable-5-1 --tm-model claude-opus-5 --agent-profile codex --codex-agent-model gpt-5.6-sol
+```
 
 You can also just ask Friday: "run the task agents on Opus". Friday has a tool for it and
 only changes models when you ask.
@@ -366,6 +385,7 @@ model each group runs on and where the choice came from: set for this GM, set wi
 |---|---|---|
 | `model.gm`, `model.tm`, `model.agents` | unset | the model of each group; unset means the profile's own model |
 | `model.codex-agents` | unset | the model for task agents on Codex profiles, which has its own names |
+| `profile.agents` | unset | profile new task agents are created on, any Claude Code or Codex profile; unset means the GM's |
 | `team.size` | 4 | task agents a new GM starts with |
 | `team.notify` | true | desktop notification when something needs you |
 | `gm.propose` | true | true: Friday shows the tasks it would create and waits for your go · false: clear single tasks start at once |

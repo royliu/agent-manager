@@ -185,10 +185,11 @@ gm
   .argument('<profile>', 'a Claude Code or Codex profile, e.g. personal')
   .argument('[name]', 'a name for the GM, e.g. friday (defaults to the folder name)')
   .option('--agents <n>', 'task agents to create (default: team.size)')
-  .option('--gm-model <model>', "the GM's model for this GM only (default: the profile's model; \"default\" clears)")
+  .option('--gm-model <model>', "the GM's model for this GM only, an official id such as claude-fable-5-1 (default: the profile's model; \"default\" clears)")
   .option('--tm-model <model>', "the task manager's model for this GM only")
   .option('--agent-model <model>', "the task agents' model for this GM only")
   .option('--codex-agent-model <model>', 'the model for task agents on Codex profiles')
+  .option('--agent-profile <profile>', "the profile task agents run on, for this GM only: any Claude Code or Codex profile (default: the GM's)")
   .option('--dir <path>', 'workspace folder (default: current folder)')
   .option('--no-open', 'start the team in the background without opening the conversation')
   .option('--keep-api-keys', 'do not strip ANTHROPIC_API_KEY / OPENAI_API_KEY')
@@ -287,7 +288,7 @@ program
 program
   .command('config')
   .description('settings for every GM: am config lists them · am config <group.key> <value> sets one · "default" clears')
-  .argument('[key]', 'e.g. model.tm, team.size, gm.propose, tm.answers, agent.compact-at, limits.budget-usd')
+  .argument('[key]', 'e.g. model.tm, profile.agents, team.size, gm.propose, tm.answers, agent.compact-at, limits.budget-usd')
   .argument('[value]')
   .action(async (key, value) => {
     await configCommand(key, value);
@@ -436,6 +437,7 @@ program
   .option('--tm-model <model>')
   .option('--agent-model <model>')
   .option('--codex-agent-model <model>')
+  .option('--agent-profile <profile>')
   .option('--dir <path>')
   .option('--keep-api-keys')
   .option('--dry-run')

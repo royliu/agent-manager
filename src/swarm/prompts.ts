@@ -6,6 +6,21 @@ abbreviations, protocol names or internal identifiers. The only shorthand allowe
 file paths, and commands the reader would type. Say what a thing does, not what it is called. Never mention
 tools, servers, sockets, hooks or "MCP"; describe the effect instead ("I noted that on #11").`;
 
+/**
+ * A prompt is passed to the agent process as a command-line argument, and a process
+ * cannot be started with a NUL in its arguments. Agent memory and checkpoints are
+ * written by agents, and an agent working on code that discusses control characters
+ * can store a real one: on 9 Sep 2026 a NUL inside one agent's memory made every
+ * start of that agent fail instantly, and the manager retried every five seconds,
+ * filling the inbox with 300 identical failures while the agent sat idle. Strip
+ * control characters at the last moment, where every prompt is built, rather than
+ * trusting every writer upstream.
+ */
+function stripControl(text: string): string {
+  // Keep tab, newline and carriage return; replace the rest with a space.
+  return text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ');
+}
+
 export function questionShape(): string {
   return `Every question must carry its context. Give all five parts:
   about    which task this is and what it is for, in one or two sentences
@@ -17,15 +32,17 @@ export function questionShape(): string {
 
 export function gmSystemPrompt(meta: SwarmMeta, team: Agent[], ws: Workspace | undefined, cfg: SwarmConfig, models: ModelsView): string {
   const names = team.map((a) => a.name).join(', ');
-  const modelLine = `You run on ${describeModel(models.gm)}; the task manager on ${describeModel(models.tm)}; the task agents on ${describeModel(models.agent)}${models.codexAgent ? `; the agents on Codex on ${describeModel(models.codexAgent)}` : ''}.`;
-  return `You are ${meta.name}, the General Manager of a small team of coding agents working in ${ws?.dir ?? meta.dir}.
+  const modelLine = `You run on ${describeModel(models.gm)}; the task manager on ${describeModel(models.tm)}${models.hasClaudeAgents ? `; the task agents on ${describeModel(models.agent)}` : ''}${models.codexAgent ? `; the task agents on Codex on ${describeModel(models.codexAgent)}` : ''}.`;
+  return stripControl(`You are ${meta.name}, the General Manager of a small team of coding agents working in ${ws?.dir ?? meta.dir}.
 Refer to yourself as ${meta.name}. The person you talk to is the owner of this project.
 
 Your team: ${names}. Each agent is a persistent session on the ${meta.profile} profile that works on one task at a
 time and is idle between tasks. ${modelLine}
 Unless the owner chose otherwise, every group runs on the profile's own default model. Change a model only when the owner
 asks: models_set changes it for this team ("default" goes back to the profile's model); the owner can also use
-"am config model.gm|model.tm|model.agents <model>" for every GM. A new model for you applies the next time the owner opens
+"am config model.gm|model.tm|model.agents <model>" for every GM. Name models by their official ids (claude-fable-5-1,
+claude-opus-5, claude-sonnet-5), not short aliases. The task agents can run on a different profile, that is a different
+subscription or tool, from you: team_profile_set, only when the owner asks; the task manager always shares your profile. A new model for you applies the next time the owner opens
 this conversation with "am gm"; for the task manager, at its next answer; for the agents, at their next run. team_list shows
 what everyone runs on. A task manager keeps the board: every task with its id, status, notes, questions and
 runs. The owner watches the board in another terminal with "am board" and can answer questions or approve work there;
@@ -94,7 +111,7 @@ Your own memory
   "where we are" note on each active task, then continue; you can be compacted safely because everything important is
   on the board.
 
-${PLAIN_ENGLISH}`;
+${PLAIN_ENGLISH}`);
 }
 
 export interface BriefInput {
@@ -155,10 +172,11 @@ export function agentBrief(b: BriefInput): string {
   lines.push(`- If a tool result tells you your context is at ${b.compactAt}% or more, immediately write a checkpoint (task.checkpoint): what is done, what is left, the next step, decisions and why. Then refresh your project memory (memory.update) and end your reply; you will be continued with a fresh context from the checkpoint.`);
   lines.push('');
   lines.push(PLAIN_ENGLISH);
-  return lines.join('\n');
+  return stripControl(lines.join('\n'));
 }
 
 export function resumeMessage(kind: 'answer' | 'feedback' | 'checkpoint' | 'workspace', text: string, task: Task): string {
+  text = stripControl(text);
   switch (kind) {
     case 'answer':
       return `Your question on #${task.id} was answered: ${text}\n\nContinue the task from where you left off. The answer is also in the task's notes.`;

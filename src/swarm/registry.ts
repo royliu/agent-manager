@@ -59,6 +59,7 @@ export const CONFIG_KEYS: Array<{ key: string; internal: string; help: string }>
   { key: 'model.tm', internal: 'tmModel', help: "the task manager's model; unset = the profile's own" },
   { key: 'model.agents', internal: 'agentModel', help: "task agents on Claude Code profiles; unset = each profile's own" },
   { key: 'model.codex-agents', internal: 'codexAgentModel', help: 'task agents on Codex profiles (Codex has its own model names)' },
+  { key: 'profile.agents', internal: 'agentProfile', help: "profile new task agents are created on, any Claude Code or Codex profile; unset = the GM's" },
   { key: 'team.size', internal: 'agents', help: 'task agents a new GM starts with' },
   { key: 'team.notify', internal: 'notify', help: 'desktop notification when something needs you' },
   { key: 'gm.propose', internal: 'dispatch', help: 'true: the GM proposes tasks and waits for your go · false: clear single tasks start at once' },

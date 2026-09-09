@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 · 2026-09-09
+
+- A profile per group: the task agents can run on a different profile, that is a different subscription or tool, from the GM. `am config profile.agents <profile>` for every GM; `am gm start … --agent-profile <profile>` for one GM, remembered, which on an existing GM moves the idle agents there now and names any agent mid-task; Friday's `team_profile_set` does the same, only when you ask. New agents are created on that profile. The task manager always shares the GM's profile. `am gm show` lists the agents' profile.
+- Official model ids in every example and help text: `claude-fable-5-1`, `claude-opus-5`, `claude-sonnet-5`, and `gpt-5.6-sol` for Codex. Short aliases such as `opus` still work, and `am` reminds you of the official id when you use one, since aliases float to whichever version the tool currently ships.
+- The models line leaves out the Claude Code agents when every agent is on Codex.
+
 ## 0.7.0 · 2026-09-08
 
 - Commands are a noun and a verb, and each verb keeps one meaning everywhere: `am profile ls|add|rm|use|run`, `am gm start|open|stop|ls|show|rm`, `am board`, `am task …`, `am agent …`, `am shell hook|env`. `start` and `stop` are for work in the background (a GM, a task), `open` for a conversation, `run` for a tool in the foreground, `use` for a switch that stays. Shortcuts drop the noun: `am` (status), `am run`, `am gm` (open), `am board`.

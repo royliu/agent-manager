@@ -5,7 +5,7 @@ import { runForeground } from '../core/exec.js';
 import { tildify } from '../core/paths.js';
 import { ensureService, serviceRunning, TmClient } from '../swarm/client.js';
 import { buildGmLaunch } from '../swarm/gmlaunch.js';
-import { agentRole, describeModel, modelsView, resolveModel } from '../swarm/models.js';
+import { agentRole, describeAgentProfile, describeModel, modelsView, resolveAgentProfile, resolveModel } from '../swarm/models.js';
 import { swarmPaths } from '../swarm/paths.js';
 import { listSwarms, loadSwarmConfig, removeSwarm, resolveSwarmName, saveSwarm } from '../swarm/registry.js';
 import { isActive, needsYou, statusLabel, type BoardSnapshot } from '../swarm/service.js';
@@ -109,6 +109,7 @@ export async function gmShowCommand(name: string | undefined, opts: { json?: boo
   console.log('');
   console.log(`  ${padEnd(dim('general manager'), 18)}${describeModel(models.gm)}`);
   console.log(`  ${padEnd(dim('task manager'), 18)}${describeModel(models.tm)}`);
+  console.log(`  ${padEnd(dim("agents' profile"), 18)}${describeAgentProfile(resolveAgentProfile(meta, cfg))}`);
   console.log('');
   console.log('  ' + padEnd(dim('AGENT'), 14) + padEnd(dim('STATE'), 12) + padEnd(dim('TASK'), 8) + padEnd(dim('CTX'), 6) + padEnd(dim('PROFILE'), 12) + dim('MODEL'));
   for (const a of team) {

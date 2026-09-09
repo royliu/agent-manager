@@ -131,14 +131,14 @@ You see two things: Friday and the board. Everything else is Friday's business.
 
 | Command | Does |
 |---|---|
-| `am gm start <profile> [name] [--agents N] [--gm-model\|--tm-model\|--agent-model <m>] [--no-open]` | start a GM here and open the conversation; model flags are remembered for this GM |
+| `am gm start <profile> [name] [--agents N] [--gm-model\|--tm-model\|--agent-model <m>] [--agent-profile <p>] [--no-open]` | start a GM here and open the conversation; model and profile flags are remembered for this GM |
 | `am gm [name]` · `am gm open [name]` | open Friday's conversation where you left it |
 | `am gm stop [name]` | stop the team and task manager; the board is kept |
 | `am gm ls` · `am gm show [name]` · `am gm rm <name>` | every GM · one GM in full (models, team, what needs you) · forget a stopped GM |
 | `am board [name] [-g status\|agent\|eta] [--json]` | the board, live |
 | `am task ls\|show\|add\|note\|eta\|answer\|approve\|reject\|stop\|start\|assign\|cancel\|retry #id …` | act on a task from the shell (`--gm <name>` from elsewhere) |
 | `am agent ls\|add\|rm\|move` | the task agents (add one on another profile: `am agent add --profile work`) |
-| `am config [group.key] [value]` | for every GM: `model.gm` `model.tm` `model.agents` `team.size` `gm.propose` `tm.answers` `agent.compact-at` `limits.budget-usd` … (`default` clears) |
+| `am config [group.key] [value]` | for every GM: `model.gm` `model.tm` `model.agents` `profile.agents` `team.size` `gm.propose` `tm.answers` `agent.compact-at` `limits.budget-usd` … (`default` clears) |
 
 **Board keys.** `↑↓←→` move · `⏎` open a task · `g` group by status, agent or ETA · `s` sort ·
 `d` hide done · `/` filter · `r` reply to a question · `a` approve · `x` send back with
@@ -167,16 +167,25 @@ worktree is its own folder and can have its own GM.
 Where things live: `~/.agent-manager/swarms/<name>/` holds the tasks, notes, events, the
 team, the workspace brief and the agents' run logs; `swarms.json` maps names to folders.
 
-Models: three groups, each yours to set: the GM, the task manager, and the task agents.
-By default all three run on the profile's own model (the `model` in that profile's Claude
-Code settings, or Codex config). Change one for every GM with `am config model.gm`,
-`model.tm` or `model.agents`; for one GM with `am gm start … --gm-model`, `--tm-model`
-or `--agent-model` (remembered for that GM); or just ask Friday, who has a tool for it and
-changes models only when you ask. `default` puts a group back on the profile's model.
-`am agent ls` and Friday's team list show what everyone runs on. A new GM model applies when
-you next open the conversation; the task manager's at its next answer; the agents' at their
-next run. Agents on Codex profiles have their own key, `model.codex-agents`, since Codex has its
-own model names. Compaction: `am` asks the tool to compact
+Models and profiles per group: the GM, the task manager and the task agents each have a model
+setting, and the task agents can live on a different profile from the GM, which is how you mix
+subscriptions or tools. By default every group runs on the profile's own model and the agents
+share the GM's profile. For every GM: `am config model.gm`, `model.tm`, `model.agents`
+(`model.codex-agents` for agents on Codex) and `profile.agents`. For one GM, remembered:
+`am gm start … --gm-model`, `--tm-model`, `--agent-model`, `--agent-profile`. Or ask Friday, who
+changes these only when you ask. Name models by their official ids, `claude-fable-5-1`,
+`claude-opus-5`, `claude-sonnet-5`, or for Codex the id it accepts such as `gpt-5.6-sol`; short
+aliases like `opus` work but float to whatever the tool currently maps them to. `default` puts
+a setting back. The task manager always shares the GM's profile. `am gm show` lists what every
+group runs on. A new GM model applies when you next open the conversation; the task manager's
+at its next answer; the agents' at their next run. Friday on Fable, the task manager on Opus,
+the agents on a Codex plan:
+
+```sh
+am gm start personal friday --gm-model claude-fable-5-1 --tm-model claude-opus-5 --agent-profile codex --codex-agent-model gpt-5.6-sol
+```
+
+Compaction: `am` asks the tool to compact
 at `agent.compact-at` where it exposes a setting (`agent.compact-env`), and independently
 watches each agent's context and drives the checkpoint-and-fresh-session step itself.
 

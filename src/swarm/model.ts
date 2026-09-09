@@ -176,12 +176,16 @@ export const SwarmMetaSchema = z.object({
   gmSessionId: z.string().optional(),
   /** The task manager's own conversation, so its answers stay consistent over time. */
   tmSessionId: z.string().optional(),
-  /** Models set for this GM only (am start --gm-model …, or the GM's models_set); they beat the global swarm.*Model settings. */
+  /** Models set for this GM only (am gm start --gm-model …, or the GM's models_set); they beat the global model.* settings. */
   models: z.object({
     gm: z.string().optional(),
     tm: z.string().optional(),
     agent: z.string().optional(),
     codexAgent: z.string().optional(),
+  }).optional(),
+  /** Profiles set for this GM only: the profile new task agents are created on (am gm start --agent-profile). */
+  profiles: z.object({
+    agents: z.string().optional(),
   }).optional(),
 });
 export type SwarmMeta = z.infer<typeof SwarmMetaSchema>;
@@ -203,6 +207,8 @@ export const SwarmConfigSchema = z.object({
   codexAgentModel: z.string().optional(),
   /** The General Manager's model. Unset: the profile's own default model. */
   gmModel: z.string().optional(),
+  /** Profile new task agents are created on (any Claude Code or Codex profile). Unset: the GM's profile. */
+  agentProfile: z.string().optional(),
   permissionMode: z.string().default('acceptEdits'),
   allow: z.array(z.string()).default(['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash', 'WebFetch', 'WebSearch', 'mcp__swarm', 'mcp__swarm__*']),
   budgetUsd: z.number().optional(),

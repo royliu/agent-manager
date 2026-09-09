@@ -34,6 +34,8 @@ export interface ModelsView {
   agent: ModelChoice;
   /** Present only when at least one task agent runs on a Codex profile. */
   codexAgent?: ModelChoice;
+  /** False when every task agent is on a Codex profile, so the Claude Code line can be left out. */
+  hasClaudeAgents: boolean;
 }
 
 /** The model a profile's tool would pick on its own. */
@@ -88,18 +90,38 @@ export function modelsView(meta: SwarmMeta, cfg: SwarmConfig, gmProfile: Profile
     tm: resolveModel('tm', meta, cfg, gmProfile),
     agent: resolveModel('agent', meta, cfg, claude ? profileOf(claude.profile) : gmProfile),
     codexAgent: codex ? resolveModel('codexAgent', meta, cfg, profileOf(codex.profile)) : undefined,
+    hasClaudeAgents: !!claude || !codex,
   };
 }
 
 /** One line per group, for `am gm start`, `am gm show` and the GM's team list. */
 export function modelsLines(v: ModelsView, gmName: string): string[] {
-  const out = [
-    `${gmName} runs on ${describeModel(v.gm)}`,
-    `task manager on ${describeModel(v.tm)}`,
-    `task agents on ${describeModel(v.agent)}`,
-  ];
+  const out = [`${gmName} runs on ${describeModel(v.gm)}`, `task manager on ${describeModel(v.tm)}`];
+  if (v.hasClaudeAgents) out.push(`task agents on ${describeModel(v.agent)}`);
   if (v.codexAgent) out.push(`task agents on Codex on ${describeModel(v.codexAgent)}`);
   return out;
+}
+
+/** The profile task agents are created on: set for this GM, else for every GM, else the GM's own. */
+export function resolveAgentProfile(meta: SwarmMeta, cfg: SwarmConfig): { profile: string; source: ModelSource } {
+  if (meta.profiles?.agents) return { profile: meta.profiles.agents, source: 'this GM' };
+  if (cfg.agentProfile) return { profile: cfg.agentProfile, source: 'am config' };
+  return { profile: meta.profile, source: 'profile' };
+}
+
+export function describeAgentProfile(c: { profile: string; source: ModelSource }): string {
+  return c.source === 'profile' ? `${c.profile} (the GM's profile)` : `${c.profile} (set ${c.source === 'this GM' ? 'for this GM' : 'with am config'})`;
+}
+
+/**
+ * Short names such as "opus" are aliases the tool resolves to whichever version it currently
+ * maps them to. The official ids pin a version: claude-fable-5-1, claude-opus-5, claude-sonnet-5.
+ */
+export function modelNameNote(model: string | undefined): string | undefined {
+  if (!model) return undefined;
+  const alias: Record<string, string> = { opus: 'claude-opus-5', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5-20251001', fable: 'claude-fable-5-1' };
+  const official = alias[model.toLowerCase()];
+  return official ? `"${model}" is a short alias; the tool maps it to whichever ${model} it currently ships. To pin a version, use the official id, e.g. ${official}.` : undefined;
 }
 
 /** Turn a user-facing value into a stored one: empty, "default" or "profile" clears the setting. */

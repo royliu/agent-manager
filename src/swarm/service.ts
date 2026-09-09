@@ -17,7 +17,7 @@ import { agentBrief, gmSystemPrompt, resumeMessage } from './prompts.js';
 import type { Push, Request, Response } from './protocol.js';
 import { RpcError } from './protocol.js';
 import { findSwarm, loadSwarmConfig, saveSwarm } from './registry.js';
-import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, resolveModel, ROLE_LABEL, windowFor, type ModelsView } from './models.js';
+import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, resolveAgentProfile, resolveModel, ROLE_LABEL, windowFor, type ModelsView } from './models.js';
 import { Store, writeJsonAtomic } from './store.js';
 import { readClaudeSession } from './transcript.js';
 import { triageQuestion } from './triage.js';
@@ -394,6 +394,10 @@ export class TaskManagerService {
         return this.models();
       case 'models.set':
         return this.setModels(p, str(p, 'by', false) || 'you');
+      case 'profiles.get':
+        return resolveAgentProfile(this.meta, this.cfg);
+      case 'profiles.set':
+        return this.setAgentsProfile(str(p, 'agents', false), str(p, 'by', false) || 'you');
       case 'team.add':
         return this.addAgent(str(p, 'name', false) || undefined, str(p, 'profile', false) || undefined, str(p, 'model', false) || undefined);
       case 'team.remove':
@@ -1023,8 +1027,8 @@ export class TaskManagerService {
     const team = this.store.team();
     const n = name ?? `${this.meta.name}-${team.length + 1}`;
     if (team.some((a) => a.name === n)) throw new RpcError(`agent ${n} exists`);
-    const prof = profileName ? profileByName(profileName) : this.profile;
-    if (!prof) throw new RpcError(`no profile ${profileName}`);
+    const prof = profileName ? profileByName(profileName) : profileByName(resolveAgentProfile(this.meta, this.cfg).profile);
+    if (!prof) throw new RpcError(`no profile ${profileName ?? resolveAgentProfile(this.meta, this.cfg).profile}`);
     if (prof.provider !== 'claude-code' && prof.provider !== 'codex') throw new RpcError(`profile ${prof.name} is ${prof.provider}; agents need Claude Code or Codex`);
     const a: Agent = { name: n, profile: prof.name, provider: prof.provider, model, state: 'idle', contextPct: 0, memory: '', rotateSession: false, paused: false, usdToday: 0, nudges: 0 };
     team.push(a);
@@ -1304,6 +1308,46 @@ export class TaskManagerService {
     this.event(by, `models: ${changes.join('; ')}`);
     this.push({ event: 'team' });
     return this.models();
+  }
+  /**
+   * The profile task agents live on, for this GM. Idle agents move now (their next task starts a fresh
+   * session there); an agent in the middle of a run is left alone and named, so the owner can move it later.
+   */
+  private setAgentsProfile(profileName: string, by: string): { profile: string; source: string; moved: string[]; busy: string[] } {
+    const fresh = this.store.meta() ?? this.meta;
+    const value = normalizeModelValue(profileName);
+    if (value) {
+      const prof = profileByName(value);
+      if (!prof) throw new RpcError(`no profile named ${value}`);
+      if (prof.provider !== 'claude-code' && prof.provider !== 'codex') throw new RpcError(`profile ${prof.name} is ${prof.provider}; agents need Claude Code or Codex`);
+    }
+    fresh.profiles = value ? { ...(fresh.profiles ?? {}), agents: value } : undefined;
+    this.meta.profiles = fresh.profiles;
+    this.store.saveMeta(fresh);
+    const reg = findSwarm(this.name);
+    if (reg) saveSwarm({ ...reg, profiles: fresh.profiles });
+    const target = resolveAgentProfile(this.meta, this.cfg);
+    const prof = profileByName(target.profile);
+    if (!prof || (prof.provider !== 'claude-code' && prof.provider !== 'codex')) throw new RpcError(`profile ${target.profile} is missing or is not a Claude Code or Codex profile`);
+    const moved: string[] = [];
+    const busy: string[] = [];
+    const team = this.store.team();
+    for (const a of team) {
+      if (a.profile === prof.name) continue;
+      if (a.state === 'working' || a.state === 'compacting') {
+        busy.push(a.name);
+        continue;
+      }
+      a.profile = prof.name;
+      a.provider = prof.provider;
+      a.sessionId = undefined;
+      a.sessionCwd = undefined;
+      moved.push(a.name);
+    }
+    this.store.saveTeam(team);
+    this.event(by, `task agents' profile → ${target.profile}${moved.length ? ` (moved ${moved.join(', ')})` : ''}${busy.length ? ` (${busy.join(', ')} still working; move later)` : ''}`);
+    this.push({ event: 'team' });
+    return { profile: target.profile, source: target.source, moved, busy };
   }
   private stats(a: Agent, sessionId?: string) {
     if (!sessionId || a.provider !== 'claude-code') return undefined;
