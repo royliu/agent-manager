@@ -20,6 +20,10 @@ export const codexAgent: AgentAdapter = {
       '-c', `sandbox_mode=${toml('workspace-write')}`,
       '-c', `mcp_servers.swarm.command=${toml(l.mcpCommand.command)}`,
       '-c', `mcp_servers.swarm.args=[${l.mcpCommand.args.map(toml).join(',')}]`,
+      // Task updates are the agent's control channel, not an untrusted external action. Codex
+      // otherwise classifies writes such as task_eta/task_report as approval-gated; exec runs
+      // are non-interactive, so those calls are refused and the worker can never report.
+      '-c', `mcp_servers.swarm.default_tools_approval_mode=${toml('approve')}`,
     ];
     if (l.model) common.push('-m', l.model);
     const args = l.resume ? ['exec', 'resume', l.sessionId, ...common, prompt] : ['exec', ...common, prompt];

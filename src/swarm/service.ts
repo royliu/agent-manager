@@ -180,6 +180,8 @@ export class TaskManagerService {
         a.state = 'idle';
         const t = a.taskId !== undefined ? this.store.get(a.taskId) : undefined;
         if (t && t.status === 'in_progress') {
+          const run = t.runs.find((r) => !r.endedAt);
+          if (run) this.learnSessionId(a, run);
           this.closeRun(t, 'paused', 'task manager restarted');
           t.status = 'open';
           t.dispatchRequested = true;
@@ -205,6 +207,8 @@ export class TaskManagerService {
       const agent = this.agent(agentName);
       const t = agent?.taskId !== undefined ? this.store.get(agent.taskId) : undefined;
       if (t) {
+        const run = t.runs.find((r) => !r.endedAt);
+        if (agent && run) this.learnSessionId(agent, run);
         this.closeRun(t, 'paused', 'task manager stopped');
         if (t.status === 'in_progress') {
           t.status = 'open';
@@ -1622,6 +1626,16 @@ export class TaskManagerService {
     });
   }
 
+  /** Codex assigns its own thread id after launch; preserve it before any continuation or restart. */
+  private learnSessionId(a: Agent, run: Run): void {
+    const adapter = agentAdapter(a.provider);
+    if (!adapter.sessionIdFromLog || !run.log) return;
+    const sid = adapter.sessionIdFromLog(run.log);
+    if (!sid) return;
+    a.sessionId = sid;
+    run.sessionId = sid;
+  }
+
   private onExit(agentName: string, taskId: number, runId: string, code: number | null, child?: ChildProcess): void {
     if (this.children.get(agentName) === child) this.children.delete(agentName);
     const a = this.agent(agentName);
@@ -1641,14 +1655,7 @@ export class TaskManagerService {
       return;
     }
     // Learn the session id if the tool assigned it (Codex).
-    const adapter = agentAdapter(a.provider);
-    if (adapter.sessionIdFromLog && run.log) {
-      const sid = adapter.sessionIdFromLog(run.log);
-      if (sid) {
-        a.sessionId = sid;
-        run.sessionId = sid;
-      }
-    }
+    this.learnSessionId(a, run);
     const stats = this.stats(a, run.sessionId);
     if (stats) {
       run.tokens = stats.totals.total;
