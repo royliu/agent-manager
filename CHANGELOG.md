@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2 · 2026-09-09
+
+- The 90% context line holds. Until now the checkpoint notice reached an agent only through the result of a task tool, so an agent busy reading and editing files could run past 100% without seeing it. Two fixes: every Claude Code agent now carries a hook that refuses its next tool call with the notice once it is over the line, so it sees it on its very next action; and if an agent still has not checkpointed after `agent.compact-grace` minutes (default 3) or at 98% as a last resort, the task manager ends the run, writes the checkpoint itself from what it saw (last progress, last words, recent actions) and continues the task in a fresh session, telling the GM for awareness.
+- An agent whose last session is already over the line starts its next task in a fresh session rather than inheriting a full window.
+- Safeguards around that: a run that is already over the line before it has done anything, or a third short compaction in a row, means the brief itself is too big; the task goes on hold with a note asking the GM to trim its notes or split it, instead of compacting in a loop. The agent's brief now carries only the latest checkpoint note, since earlier ones are superseded.
+
 ## 0.8.1 · 2026-09-09
 
 - Nobody sits idle: the moment an agent reports a task finished, the task manager gives it the next open task by itself, most urgent first (priority, then ETA), preferring an agent that already worked on that task's parent or siblings. Friday is told for awareness. Tasks waiting on another task are skipped, and so are tasks on hold. `tm.autostart false` restores the old behaviour, where only tasks someone started are picked up.

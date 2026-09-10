@@ -72,7 +72,10 @@ async function readStdin(): Promise<string> {
  * Claude Code hooks for the GM session. They must be fast and quiet, so they
  * never start the service; if it is down there is nothing to say.
  */
-export async function hookCommand(kind: 'inbox' | 'stop' | 'status', swarm: string): Promise<void> {
+/** Task tools an agent may always call, notice or not: they are how it checkpoints and reports. */
+const ALWAYS_ALLOWED = /task_checkpoint|memory_update|task_note|task_progress|task_report|task_ask|task_eta/;
+
+export async function hookCommand(kind: 'inbox' | 'stop' | 'status' | 'compact', swarm: string, agent?: string): Promise<void> {
   const raw = await readStdin();
   let input: Record<string, unknown> = {};
   try {
@@ -88,6 +91,18 @@ export async function hookCommand(kind: 'inbox' | 'stop' | 'status', swarm: stri
     return;
   }
   try {
+    if (kind === 'compact') {
+      // An agent's PreToolUse hook: over the line, refuse the call and say why; the model reads stderr.
+      if (!agent) return;
+      const tool = typeof input.tool_name === 'string' ? input.tool_name : '';
+      if (ALWAYS_ALLOWED.test(tool)) return;
+      const notice = await c.call<string | null>('agent.notice', { agent });
+      if (notice && /your context is at/.test(notice)) {
+        process.stderr.write(`${notice} (This ${tool || 'tool'} call was not run.)\n`);
+        process.exitCode = 2;
+      }
+      return;
+    }
     if (kind === 'inbox') {
       const items = await c.call<InboxItem[]>('inbox.read', { ack: true });
       if (items.length) {

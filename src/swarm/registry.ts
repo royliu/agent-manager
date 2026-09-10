@@ -69,6 +69,7 @@ export const CONFIG_KEYS: Array<{ key: string; internal: string; help: string }>
   { key: 'agent.permissions', internal: 'permissionMode', help: 'Claude Code permission mode for agents' },
   { key: 'agent.allow', internal: 'allow', help: 'tools agents may use without asking (a JSON list)' },
   { key: 'agent.compact-at', internal: 'compactAt', help: 'context % at which an agent checkpoints and gets a fresh session' },
+  { key: 'agent.compact-grace', internal: 'compactGraceMin', help: 'minutes an agent gets to write its own checkpoint past the line; then the task manager checkpoints for it and restarts it with a fresh context' },
   { key: 'agent.stall-after', internal: 'stallAfterMin', help: 'minutes without activity before an agent counts as stalled' },
   { key: 'agent.context-window', internal: 'contextWindow', help: 'assumed context window for models without a [1m] marker' },
   { key: 'agent.compact-env', internal: 'compactEnv', help: 'environment variable that asks the tool itself to compact at agent.compact-at' },

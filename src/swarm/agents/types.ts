@@ -19,6 +19,8 @@ export interface AgentLaunch {
   compactAt: number;
   compactEnv: string;
   logPath: string;
+  /** Claude Code settings file with the hooks the task manager uses to reach the agent (compaction notice). */
+  settingsPath?: string;
 }
 
 export interface AgentAdapter {

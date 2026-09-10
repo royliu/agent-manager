@@ -10,6 +10,7 @@ export const claudeCodeAgent: AgentAdapter = {
       '--append-system-prompt', l.systemPrompt, '--permission-mode', l.permissionMode];
     if (l.allow.length) args.push('--allowedTools', ...l.allow);
     if (l.model) args.push('--model', l.model);
+    if (l.settingsPath) args.push('--settings', l.settingsPath);
     if (l.resume) args.push('--resume', l.sessionId);
     else args.push('--session-id', l.sessionId);
     const env = buildEnv('claude-code', l.profileHome, { ...process.env, ...l.extraEnv });

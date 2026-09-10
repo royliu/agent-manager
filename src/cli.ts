@@ -344,8 +344,9 @@ program
   .argument('<kind>')
   .option('--gm <name>')
   .option('--swarm <name>')
+  .option('--agent <name>')
   .action(async (kind, opts) => {
-    await hookCommand(kind as 'inbox' | 'stop' | 'status', opts.gm ?? opts.swarm);
+    await hookCommand(kind as 'inbox' | 'stop' | 'status' | 'compact', opts.gm ?? opts.swarm, opts.agent);
   });
 
 // Old plumbing names, still spawned by task managers and GM sessions started before 0.7.0.

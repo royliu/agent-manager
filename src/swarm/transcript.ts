@@ -9,6 +9,8 @@ export interface SessionStats {
   /** Input-side tokens of the latest request: what the context window holds now. */
   contextTokens: number;
   contextPct: number;
+  /** Context use at the session's very first reply: the size of the brief itself, before any work. */
+  firstContextPct?: number;
   totals: TokenTotals;
   usd: number;
   lastActivity?: number;
@@ -66,6 +68,7 @@ export function readClaudeSession(home: string, sessionId: string, contextWindow
   const byModel = new Map<string, TokenTotals>();
   let model: string | undefined;
   let contextTokens = 0;
+  let firstContextTokens: number | undefined;
   let turns = 0;
   const recent: Array<{ at: number; text: string }> = [];
   let lastText: string | undefined;
@@ -96,6 +99,7 @@ export function readClaudeSession(home: string, sessionId: string, contextWindow
     const cw = u.cache_creation_input_tokens ?? 0;
     const out = u.output_tokens ?? 0;
     contextTokens = input + cr + cw;
+    if (firstContextTokens === undefined) firstContextTokens = contextTokens;
     totals.input += input;
     totals.cacheRead += cr;
     totals.cacheWrite += cw;
@@ -122,6 +126,7 @@ export function readClaudeSession(home: string, sessionId: string, contextWindow
     model,
     contextTokens,
     contextPct: Math.min(100, Math.round((contextTokens / window) * 100)),
+    firstContextPct: firstContextTokens === undefined ? undefined : Math.min(100, Math.round((firstContextTokens / window) * 100)),
     totals,
     usd,
     lastActivity,

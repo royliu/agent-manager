@@ -133,11 +133,14 @@ export interface BriefInput {
   compactAt: number;
 }
 
+/** Every note, but only the latest checkpoint: earlier ones are superseded and would only grow the brief. */
 function fmtNotes(t: Task): string {
   if (t.notes.length === 0) return '  (none yet)';
-  return t.notes
-    .map((n) => `  - [${n.kind}] ${n.author}: ${n.text}`)
-    .join('\n');
+  const checkpoints = t.notes.filter((n) => n.kind === 'checkpoint');
+  const latest = checkpoints[checkpoints.length - 1];
+  const lines = t.notes.filter((n) => n.kind !== 'checkpoint' || n === latest).map((n) => `  - [${n.kind}] ${n.author}: ${n.text}`);
+  if (checkpoints.length > 1) lines.push(`  - (${checkpoints.length - 1} earlier checkpoint${checkpoints.length > 2 ? 's' : ''} superseded by the one above)`);
+  return lines.join('\n');
 }
 
 /** The first message an agent gets for a task. Everything it needs, nothing it has to ask for. */

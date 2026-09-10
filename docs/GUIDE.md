@@ -46,7 +46,7 @@ cd agent-manager
 npm install
 npm run build
 npm install -g .          # puts `am` on your PATH (or `npm link` while developing)
-am --version              # 0.8.1
+am --version              # 0.8.2
 ```
 
 `am init` (next section) offers to install the shell hook, which lets `am profile use` switch
@@ -297,10 +297,17 @@ on hold; so does `am task hold 12` or asking Friday to hold it. `am task start 1
 Turn the behaviour off with `am config tm.autostart false`, and the task manager starts only
 what Friday or you start.
 
-**Context limits.** Each agent watches its own context. At 90% (`agent.compact-at`) it writes
-a checkpoint note on its task (done, left, next step, decisions and why), refreshes its
-project memory, and is continued in a fresh session from the note. You see it on the board
-as "compacting"; nothing is lost because the board is the memory.
+**Context limits.** The 90% line (`agent.compact-at`) always holds. When an agent crosses it,
+the task manager tells it on its very next action: the agent's next tool call is refused with
+the notice, so it cannot miss it, and it writes a checkpoint note on its task (done, left, next
+step, decisions and why), refreshes its project memory, and is continued in a fresh session
+from the note. If it still has not checkpointed after a few minutes (`agent.compact-grace`,
+default 3), or at 98% as a last resort, the task manager ends the run, writes the checkpoint itself from
+what it saw (last progress, last words, recent actions) and continues the task in a fresh
+session, telling Friday for awareness. You see it on the board as "compacting"; nothing is
+lost because the board is the memory. One safeguard: if a fresh session is already over the
+line before it has done anything, the task's brief itself is too big, and compacting again would
+only spin. The task goes on hold with a note asking Friday to trim its notes or split it.
 
 **From the shell.** Everything the board does is also a command, useful in scripts:
 
@@ -405,6 +412,7 @@ model each group runs on and where the choice came from: set for this GM, set wi
 | `agent.permissions` | `acceptEdits` | Claude Code permission mode for agents |
 | `agent.allow` | Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, the task tools | tools agents may use without asking |
 | `agent.compact-at` | 90 | context percentage at which an agent checkpoints and gets a fresh session |
+| `agent.compact-grace` | 3 | minutes an agent gets to write its own checkpoint past the line before the task manager checkpoints for it and restarts it fresh |
 | `agent.stall-after` | 15 | minutes without activity before an agent counts as stalled |
 | `agent.context-window` | 200000 | assumed window for models without a `[1m]` marker |
 | `agent.compact-env` | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | environment variable that asks the tool itself to compact at `agent.compact-at` |

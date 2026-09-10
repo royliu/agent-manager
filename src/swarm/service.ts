@@ -19,7 +19,7 @@ import { RpcError } from './protocol.js';
 import { findSwarm, loadSwarmConfig, saveSwarm } from './registry.js';
 import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, resolveAgentProfile, resolveModel, ROLE_LABEL, windowFor, type ModelsView } from './models.js';
 import { Store, writeJsonAtomic } from './store.js';
-import { readClaudeSession } from './transcript.js';
+import { readClaudeSession, type SessionStats } from './transcript.js';
 import { triageQuestion } from './triage.js';
 
 type Params = Record<string, unknown>;
@@ -1267,11 +1267,37 @@ export class TaskManagerService {
         t.usage = this.sumUsage(t);
         this.store.save(t);
         dirty = true;
-        // Over the line and no checkpoint asked yet: ask through the next tool result.
-        if (stats.contextPct >= this.cfg.compactAt && !a.compactRequestedAt && !a.rotateSession) {
+        // How big the brief itself was: the context at the session's first reply, when this run began the session.
+        const freshSession = !!run.sessionId && t.runs.filter((r) => r.sessionId === run.sessionId).length === 1;
+        if (run.startContextPct === undefined && freshSession && stats.firstContextPct !== undefined) {
+          run.startContextPct = stats.firstContextPct;
+          this.store.save(t);
+        }
+        // A fresh session already over the line before doing anything: the brief is too big. Compacting again
+        // would only loop, so stop and hand it to the GM.
+        const startedOver = freshSession && run.startContextPct !== undefined && run.startContextPct >= this.cfg.compactAt;
+        if (startedOver && t.status === 'in_progress') {
+          this.holdOversized(a, t, stats);
+          continue;
+        }
+        // Over the line and no checkpoint asked yet: ask, through the next tool call (hook) and tool result.
+        if (stats.contextPct >= this.cfg.compactAt && !a.compactRequestedAt && !a.rotateSession && !startedOver) {
           a.compactRequestedAt = this.now();
           this.event('task manager', `${a.name} context at ${stats.contextPct}% → asked for a checkpoint`, t.id);
           this.inbox('context', `${a.name} is at ${stats.contextPct}% context on #${t.id}; it has been asked to write a checkpoint and will continue with a fresh context.`, t.id);
+        }
+        // Asked, but nothing written: after the grace period, or at the hard line, the task manager checkpoints for it.
+        if (a.compactRequestedAt && !a.rotateSession && t.status === 'in_progress') {
+          const waited = this.now() - a.compactRequestedAt;
+          const hardLine = Math.max(98, this.cfg.compactAt); // a last resort; the grace period is the normal path
+          if (waited > this.cfg.compactGraceMin * 60_000 || stats.contextPct >= hardLine) {
+            // Three short compactions in a row with no report between them means we are spinning, not working.
+            const previous = t.runs.filter((r) => r.endedAt).slice(-3);
+            const spinning = previous.length === 3 && previous.every((r) => r.exit === 'compacted' && (r.endedAt ?? 0) - r.startedAt < 2 * 60_000);
+            if (spinning) this.holdOversized(a, t, stats);
+            else this.forceCheckpoint(a, t, stats);
+            continue;
+          }
         }
         // Budget.
         if (this.cfg.budgetUsd && t.usage.usd >= this.cfg.budgetUsd && t.status === 'in_progress') {
@@ -1378,6 +1404,56 @@ export class TaskManagerService {
     this.push({ event: 'team' });
     return { profile: target.profile, source: target.source, moved, busy };
   }
+  /**
+   * The 90% line holds even when the agent never gets round to its own checkpoint: end the run,
+   * write a checkpoint from what the task manager saw, and continue the task in a fresh session.
+   */
+  private forceCheckpoint(a: Agent, t: Task, stats: SessionStats): void {
+    const seen = [
+      t.progress ? `Last reported progress: ${t.progress}${t.progressPct !== undefined ? ` (${t.progressPct}%)` : ''}.` : '',
+      stats.lastText ? `The agent's last words: "${stats.lastText}".` : '',
+      stats.recent.length ? `Its most recent actions, latest first: ${stats.recent.slice(0, 6).map((r) => r.text).join('; ')}.` : '',
+    ].filter(Boolean).join(' ');
+    const text = `Automatic checkpoint by the task manager: ${a.name}'s context reached ${stats.contextPct}% without a checkpoint of its own. ${seen || 'No progress had been reported.'} Decisions and findings so far are in the notes above; files in the folder are as the agent left them. Continue from there and re-check anything half-done.`;
+    this.killAgent(a.name, `context ${stats.contextPct}%, no checkpoint within the grace period`);
+    this.closeRun(t, 'compacted', `context ${stats.contextPct}% → checkpoint by the task manager → fresh session`);
+    this.note(t, 'task manager', 'checkpoint', text);
+    a.rotateSession = true;
+    a.compactRequestedAt = undefined;
+    a.contextPct = 0;
+    a.state = 'idle';
+    a.taskId = undefined;
+    this.saveAgent(a);
+    t.status = 'open';
+    t.blockedOn = undefined;
+    t.dispatchRequested = true;
+    this.store.save(t);
+    this.event('task manager', `${a.name} did not checkpoint in time at ${stats.contextPct}% → checkpointed for it; continues with a fresh context`, t.id);
+    this.inbox('context', `${a.name} reached ${stats.contextPct}% context on #${t.id} ${t.title} without writing a checkpoint, so the task manager wrote one from what it saw and is continuing the task in a fresh session. Glance at that checkpoint note if the work looks off.`, t.id);
+    this.changed(t.id);
+    void this.tick();
+  }
+  /** The task cannot be worked under the line as briefed: park it and tell the GM what to trim. */
+  private holdOversized(a: Agent, t: Task, stats: SessionStats): void {
+    this.killAgent(a.name, `over the context line (${stats.contextPct}%) as soon as it starts`);
+    this.closeRun(t, 'paused', `context ${stats.contextPct}% right after starting: the brief is too big`);
+    a.rotateSession = true;
+    a.compactRequestedAt = undefined;
+    a.contextPct = 0;
+    a.state = 'idle';
+    a.taskId = undefined;
+    this.saveAgent(a);
+    t.status = 'open';
+    t.hold = true;
+    t.dispatchRequested = false;
+    t.blockedOn = undefined;
+    this.note(t, 'task manager', 'finding', `Put on hold: a fresh session was at ${stats.contextPct}% context before doing anything, so this task's brief (description, notes, checkpoints) is too big to work under the ${this.cfg.compactAt}% line. Trim or summarise the notes, or split the task, then start it again.`);
+    this.store.save(t);
+    this.event('task manager', `${a.name} was over the context line (${stats.contextPct}%) as soon as it started → #${t.id} on hold: brief too big`, t.id);
+    this.inbox('note', `#${t.id} ${t.title} is on hold: a fresh session was at ${stats.contextPct}% context before doing anything, so its brief (description plus notes) is too big to work under the ${this.cfg.compactAt}% line. Trim or summarise its notes (task_update description; move detail into the project brief), or split it into smaller tasks, then task_start it.`, t.id);
+    this.changed(t.id);
+    this.push({ event: 'team' });
+  }
   private stats(a: Agent, sessionId?: string) {
     if (!sessionId || a.provider !== 'claude-code') return undefined;
     const prof = profileByName(a.profile);
@@ -1441,6 +1517,19 @@ export class TaskManagerService {
     return { file, command };
   }
 
+  /**
+   * Claude Code settings for an agent: a hook on every tool call that, once the agent is over the
+   * context line, refuses the call and tells it to checkpoint. So the notice reaches it on its very
+   * next action, not only when it happens to use a task tool.
+   */
+  private agentSettingsFor(a: Agent): string | undefined {
+    if (a.provider !== 'claude-code') return undefined;
+    const file = path.join(this.store.paths.dir, `agent-settings-${a.name}.json`);
+    const hook = `"${process.execPath}" "${amEntry()}" _hook compact --gm ${this.name} --agent ${a.name}`;
+    writeJsonAtomic(file, { hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: hook, timeout: 10 }] }] } });
+    return file;
+  }
+
   /** Start (or continue) an agent on a task. `message` replaces the brief when resuming mid-task. */
   private startRun(t: Task, a: Agent, message?: string): void {
     if (this.children.has(a.name)) return;
@@ -1466,7 +1555,8 @@ export class TaskManagerService {
       compactAt: this.cfg.compactAt,
     });
     // Session continuity: keep the agent's session unless it must rotate or the folder changed.
-    const mustRotate = a.rotateSession || !a.sessionId || (a.sessionCwd && a.sessionCwd !== cwd) || a.provider === 'codex' && !a.sessionId;
+    // Also start fresh when the agent's last session is already over the line: a new task must not inherit a full window.
+    const mustRotate = a.rotateSession || !a.sessionId || (a.sessionCwd && a.sessionCwd !== cwd) || a.contextPct >= this.cfg.compactAt || a.provider === 'codex' && !a.sessionId;
     const resume = !mustRotate;
     let prompt: string;
     if (resume && message) prompt = message;
@@ -1505,6 +1595,7 @@ export class TaskManagerService {
         compactAt: this.cfg.compactAt,
         compactEnv: this.cfg.compactEnv,
         logPath: run.log!,
+        settingsPath: this.agentSettingsFor(a),
       });
     } catch (e) {
       this.inbox('failed', `Could not start ${a.name} on #${t.id}: ${e instanceof Error ? e.message : String(e)}`, t.id);

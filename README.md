@@ -161,9 +161,11 @@ works too: wheel to scroll, click to select, double-click to open (hold Shift to
    the next open task, most urgent first, preferring an agent that already worked on that task's
    parent or siblings. Only tasks on hold or waiting on another task are skipped. Friday is told
    for awareness; you see it on the board.
-4. *Checkpoint at 90%, then a fresh context.* When an agent's context passes the line, it
-   writes a checkpoint note on its task, refreshes its one-paragraph project memory, and is
-   continued in a fresh session from the note. The board is the memory.
+4. *Checkpoint at 90%, then a fresh context.* When an agent's context passes the line, its
+   next tool call is refused with the notice, so it writes a checkpoint note on its task,
+   refreshes its one-paragraph project memory, and is continued in a fresh session from the
+   note. If it has not done so within a few minutes, the task manager writes the checkpoint
+   itself and restarts it fresh. The board is the memory.
 
 One folder, one GM. Running `am gm start` again in a folder that has one resumes it. A git
 worktree is its own folder and can have its own GM.

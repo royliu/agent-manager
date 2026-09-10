@@ -70,6 +70,8 @@ export const RunSchema = z.object({
   tokens: z.number().default(0),
   usd: z.number().default(0),
   contextPct: z.number().optional(),
+  /** Context use at the first measurement of the run: how big the brief itself was. */
+  startContextPct: z.number().optional(),
 });
 export type Run = z.infer<typeof RunSchema>;
 
@@ -204,6 +206,8 @@ export const SwarmConfigSchema = z.object({
   notify: z.boolean().default(true),
   stallAfterMin: z.number().default(15),
   compactAt: z.number().min(5).max(99).default(90),
+  /** Minutes an agent gets to write its own checkpoint after crossing compactAt; then the task manager writes one and restarts it fresh. */
+  compactGraceMin: z.number().min(0).default(3),
   contextWindow: z.number().default(200_000),
   /** Model for task agents on Claude Code profiles. Unset: each agent's profile default. */
   agentModel: z.string().optional(),
