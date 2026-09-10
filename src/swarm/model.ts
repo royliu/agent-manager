@@ -94,6 +94,8 @@ export const TaskSchema = z.object({
   agent: z.string().optional(),
   /** True once the GM asked for it to be worked; open tasks without it are backlog. */
   dispatchRequested: z.boolean().default(false),
+  /** Parked on purpose (stopped without feedback, or held by the GM): the task manager will not start it on its own. */
+  hold: z.boolean().default(false),
   useWorktree: z.boolean().default(false),
   worktree: z.string().optional(),
   branch: z.string().optional(),
@@ -197,6 +199,8 @@ export const SwarmConfigSchema = z.object({
   triage: z.enum(['off', 'notes', 'most']).default('most'),
   /** The task manager's model. Unset: the GM profile's own default model. */
   tmModel: z.string().optional(),
+  /** When an agent is free, the task manager starts the next open task by itself (priority, then ETA). Off: only tasks someone started. */
+  autostart: z.boolean().default(true),
   notify: z.boolean().default(true),
   stallAfterMin: z.number().default(15),
   compactAt: z.number().min(5).max(99).default(90),

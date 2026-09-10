@@ -136,7 +136,7 @@ You see two things: Friday and the board. Everything else is Friday's business.
 | `am gm stop [name]` | stop the team and task manager; the board is kept |
 | `am gm ls` · `am gm show [name]` · `am gm rm <name>` | every GM · one GM in full (models, team, what needs you) · forget a stopped GM |
 | `am board [name] [-g status\|agent\|eta] [--json]` | the board, live |
-| `am task ls\|show\|add\|note\|eta\|answer\|approve\|reject\|stop\|start\|assign\|cancel\|retry #id …` | act on a task from the shell (`--gm <name>` from elsewhere) |
+| `am task ls\|show\|add\|note\|eta\|answer\|approve\|reject\|stop\|start\|hold\|assign\|cancel\|retry #id …` | act on a task from the shell (`--gm <name>` from elsewhere) |
 | `am agent ls\|add\|rm\|move` | the task agents (add one on another profile: `am agent add --profile work`) |
 | `am config [group.key] [value]` | for every GM: `model.gm` `model.tm` `model.agents` `profile.agents` `team.size` `gm.propose` `tm.answers` `agent.compact-at` `limits.budget-usd` … (`default` clears) |
 
@@ -145,7 +145,7 @@ You see two things: Friday and the board. Everything else is Friday's business.
 feedback · `n` note · `p` priority · `c` cancel · `K` pause every agent · `q` quit. The mouse
 works too: wheel to scroll, click to select, double-click to open (hold Shift to select text).
 
-**Three rules the team follows.**
+**Four rules the team follows.**
 
 1. *Who talks to whom.* Agents ask the task manager, which is a board on the surface and
    an agent underneath: it reasons from your intent as written down (the project brief Friday
@@ -157,7 +157,11 @@ works too: wheel to scroll, click to select, double-click to open (hold Shift to
 2. *Plain English, with context.* Every question an agent asks must say what the task is
    for, what is known, the exact question, the options, and what it will do if nobody
    answers. The task manager refuses a question without those parts.
-3. *Checkpoint at 90%, then a fresh context.* When an agent's context passes the line, it
+3. *Nobody sits idle.* The moment an agent reports a task finished, the task manager gives it
+   the next open task, most urgent first, preferring an agent that already worked on that task's
+   parent or siblings. Only tasks on hold or waiting on another task are skipped. Friday is told
+   for awareness; you see it on the board.
+4. *Checkpoint at 90%, then a fresh context.* When an agent's context passes the line, it
    writes a checkpoint note on its task, refreshes its one-paragraph project memory, and is
    continued in a fresh session from the note. The board is the memory.
 

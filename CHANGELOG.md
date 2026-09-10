@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 · 2026-09-09
+
+- Nobody sits idle: the moment an agent reports a task finished, the task manager gives it the next open task by itself, most urgent first (priority, then ETA), preferring an agent that already worked on that task's parent or siblings. Friday is told for awareness. Tasks waiting on another task are skipped, and so are tasks on hold. `tm.autostart false` restores the old behaviour, where only tasks someone started are picked up.
+- On hold is now explicit: stopping a task without feedback parks it, `am task hold #id` and Friday's `task_update hold=true` do the same, and `am task start #id` releases it. The board labels such tasks "on hold".
+
 ## 0.8.0 · 2026-09-09
 
 - A profile per group: the task agents can run on a different profile, that is a different subscription or tool, from the GM. `am config profile.agents <profile>` for every GM; `am gm start … --agent-profile <profile>` for one GM, remembered, which on an existing GM moves the idle agents there now and names any agent mid-task; Friday's `team_profile_set` does the same, only when you ask. New agents are created on that profile. The task manager always shares the GM's profile. `am gm show` lists the agents' profile.

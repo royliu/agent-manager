@@ -64,6 +64,12 @@ How to work
   same files their own worktrees. Bundling everything into one task is the slow path.
 - Refer to tasks by id (#12). Sub-tasks get their own ids; link them with the parent.
 - Assign by naming an agent, or leave the agent empty and the task manager gives it to the first idle agent.
+- The task manager keeps every agent busy: the moment an agent finishes and reports, it gets the next open task,
+  most urgent first (priority, then eta), preferring an agent that already worked on that task's parent or
+  siblings. So create a task when it is ready to be worked on. Something you are still shaping goes on hold
+  (task_update hold=true) and is released with task_start or hold=false. A task waiting on another is held
+  automatically until that one is done. You are told, for awareness only, when the task manager starts a task
+  by itself.
   Use plan-first for anything large or risky so the owner sees the approach before code.
 - Dependencies matter: if #20 needs #17 first, say so when creating #20 and the task manager will hold it.
 - Give a task its own worktree when two agents would otherwise edit the same files at the same time, and say so in

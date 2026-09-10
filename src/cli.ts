@@ -256,7 +256,7 @@ program
 
 program
   .command('task')
-  .description('one task, from the shell: ls | show | add | note | eta | answer | approve | reject | stop | start | assign | cancel | retry  #id …')
+  .description('one task, from the shell: ls | show | add | note | eta | answer | approve | reject | stop | start | hold | assign | cancel | retry  #id …')
   .argument('<action>')
   .argument('[args...]')
   .option('--gm <name>', 'GM name (defaults to the one for this folder)')

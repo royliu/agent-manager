@@ -11,7 +11,7 @@ function parseId(s: string | undefined): number {
   return n;
 }
 
-/** `am task <ls|show|add|note|eta|answer|approve|reject|stop|start|assign|cancel|retry> …` */
+/** `am task <ls|show|add|note|eta|answer|approve|reject|stop|start|hold|assign|cancel|retry> …` */
 export async function taskCommand(sub: string, args: string[], opts: { gm?: string; json?: boolean; agent?: string; description?: string; start?: boolean; eta?: string }): Promise<void> {
   const meta = resolveSwarmName(opts.gm);
   if (!meta) return noSwarm(opts.gm);
@@ -58,12 +58,13 @@ export async function taskCommand(sub: string, args: string[], opts: { gm?: stri
       case 'reject': case 'stop': { const t = await c.call<Task>('task.reject', { id: parseId(args[0]), feedback: text(1), by: 'you' }); return ok(`#${t.id} → ${statusLabel(t, gm)}${text(1) ? '' : ' (on hold)'}`); }
       case 'cancel': { const t = await c.call<Task>('task.cancel', { id: parseId(args[0]), by: 'you' }); return ok(`#${t.id} cancelled`); }
       case 'retry': { const t = await c.call<Task>('task.retry', { id: parseId(args[0]) }); return ok(`#${t.id} → ${statusLabel(t, gm)}`); }
+      case 'hold': { const t = await c.call<Task>('task.update', { id: parseId(args[0]), hold: true, by: 'you' }); return ok(`#${t.id} on hold; am task start #${t.id} releases it`); }
       case 'start':
       case 'dispatch': { const t = await c.call<Task>('task.dispatch', { id: parseId(args[0]), agent: opts.agent, by: 'you' }); return ok(`#${t.id} → ${statusLabel(t, gm)}`); }
       case 'assign':
       case 'reassign': { const t = await c.call<Task>('task.reassign', { id: parseId(args[0]), agent: args[1] ?? opts.agent, by: 'you' }); return ok(`#${t.id} → ${t.agent}`); }
       default:
-        console.error(`${red('✗')} Unknown: am task ${sub}. Try ${cyan('am task ls|show|add|note|eta|answer|approve|reject|stop|start|assign|cancel|retry #id …')}`);
+        console.error(`${red('✗')} Unknown: am task ${sub}. Try ${cyan('am task ls|show|add|note|eta|answer|approve|reject|stop|start|hold|assign|cancel|retry #id …')}`);
         process.exitCode = 1;
     }
   });

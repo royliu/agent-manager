@@ -46,7 +46,7 @@ cd agent-manager
 npm install
 npm run build
 npm install -g .          # puts `am` on your PATH (or `npm link` while developing)
-am --version              # 0.8.0
+am --version              # 0.8.1
 ```
 
 `am init` (next section) offers to install the shell hook, which lets `am profile use` switch
@@ -235,7 +235,7 @@ the agent's own estimates as it reports each step.
 | `/` | filter by text |
 | `r` | reply to the open question on the selected task |
 | `a` | approve: accept finished work, or approve a plan |
-| `x` | on running or blocked work: stop it (type feedback first to redirect instead); on a report or plan: send it back with feedback |
+| `x` | on running or blocked work: stop it, which puts the task on hold (type feedback first to redirect instead); on a report or plan: send it back with feedback |
 | `n` | add a note to the task |
 | `p` | change priority |
 | `m` | assign to another agent |
@@ -288,6 +288,15 @@ on hold again from Friday or with `am task start 12`.
 **Dependencies.** If `#20` needs `#17` first, say so; the task manager holds `#20` until
 `#17` is done and then starts it on the first idle agent.
 
+**Nobody sits idle.** The moment an agent reports a task finished, the task manager hands it
+the next open task by itself: most urgent first, by priority and then ETA, and preferring an
+agent that already worked on that task's parent or siblings, since it knows that corner of the
+code. Friday is told for awareness and you see the start on the board. Two kinds of task are
+skipped: one waiting on another task, and one on hold. Stopping a task without feedback puts it
+on hold; so does `am task hold 12` or asking Friday to hold it. `am task start 12` releases it.
+Turn the behaviour off with `am config tm.autostart false`, and the task manager starts only
+what Friday or you start.
+
 **Context limits.** Each agent watches its own context. At 90% (`agent.compact-at`) it writes
 a checkpoint note on its task (done, left, next step, decisions and why), refreshes its
 project memory, and is continued in a fresh session from the note. You see it on the board
@@ -303,6 +312,7 @@ am task note 12 "Acceptance: the empty case is covered by a test."
 am task eta 12 4h
 am task approve 12 ["what you checked"]
 am task reject 12 "what to change and why"  # or: am task stop 12
+am task hold 12                             # park it; the task manager will not start it on its own
 am task cancel 12 · am task retry 12 · am task start 12 · am task assign 12 friday-3
 ```
 
@@ -390,6 +400,7 @@ model each group runs on and where the choice came from: set for this GM, set wi
 | `team.notify` | true | desktop notification when something needs you |
 | `gm.propose` | true | true: Friday shows the tasks it would create and waits for your go · false: clear single tasks start at once |
 | `gm.hud` | true | show the profile's own status line (claude-hud if installed) above Friday's line |
+| `tm.autostart` | true | when an agent frees up, the task manager gives it the next open task by itself; false: only tasks someone started |
 | `tm.answers` | `most` | which questions the task manager answers itself: `most` (reasons and answers, escalates rarely) · `notes` (only what a note settles) · `off` (everything goes to Friday) |
 | `agent.permissions` | `acceptEdits` | Claude Code permission mode for agents |
 | `agent.allow` | Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, the task tools | tools agents may use without asking |

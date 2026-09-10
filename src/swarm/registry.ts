@@ -64,6 +64,7 @@ export const CONFIG_KEYS: Array<{ key: string; internal: string; help: string }>
   { key: 'team.notify', internal: 'notify', help: 'desktop notification when something needs you' },
   { key: 'gm.propose', internal: 'dispatch', help: 'true: the GM proposes tasks and waits for your go · false: clear single tasks start at once' },
   { key: 'gm.hud', internal: 'hud', help: "show the profile's own status line (claude-hud if installed) above the GM's line" },
+  { key: 'tm.autostart', internal: 'autostart', help: 'when an agent frees up, the task manager gives it the next open task by itself (priority, then ETA); false: only tasks someone started' },
   { key: 'tm.answers', internal: 'triage', help: 'which questions the task manager answers itself: most · notes (only what a note settles) · off (all go to the GM)' },
   { key: 'agent.permissions', internal: 'permissionMode', help: 'Claude Code permission mode for agents' },
   { key: 'agent.allow', internal: 'allow', help: 'tools agents may use without asking (a JSON list)' },

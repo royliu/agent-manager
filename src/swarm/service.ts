@@ -65,6 +65,8 @@ export function statusLabel(t: Task, gm = 'gm'): string {
       return t.awaitingPlanApproval ? 'plan · awaiting you' : 'plan';
     case 'in_progress':
       return 'in progress';
+    case 'open':
+      return t.hold ? 'on hold' : 'open';
     default:
       return t.status;
   }
@@ -481,6 +483,7 @@ export class TaskManagerService {
       dependsOn: deps,
       agent,
       dispatchRequested: false,
+      hold: false,
       useWorktree: p.useWorktree === true,
       notes: [],
       questions: [],
@@ -528,8 +531,13 @@ export class TaskManagerService {
     if (typeof p.reviewBy === 'string') t.reviewBy = p.reviewBy === 'gm' ? 'gm' : 'user';
     if (p.planFirst !== undefined) t.planFirst = p.planFirst === true;
     if (p.useWorktree !== undefined) t.useWorktree = p.useWorktree === true;
+    if (p.hold !== undefined) {
+      t.hold = p.hold === true;
+      if (t.hold) t.dispatchRequested = false;
+    }
     this.store.save(t);
-    this.event(str(p, 'by', false) || this.gm(), 'updated', t.id);
+    this.event(str(p, 'by', false) || this.gm(), p.hold === true ? 'put on hold' : p.hold === false ? 'taken off hold' : 'updated', t.id);
+    if (p.hold === false) void this.tick();
     this.changed(t.id);
     return t;
   }
@@ -542,6 +550,7 @@ export class TaskManagerService {
       t.agent = agentName;
     }
     t.dispatchRequested = true;
+    t.hold = false;
     if (t.status === 'plan' && t.awaitingPlanApproval) {
       // approving the plan is the dispatch
     } else if (t.status === 'open' || t.status === 'plan') {
@@ -856,6 +865,7 @@ export class TaskManagerService {
       } else {
         this.note(t, by, 'decision', 'Stopped. On hold until started again.');
         t.dispatchRequested = false;
+        t.hold = true;
         t.progress = undefined;
         this.store.save(t);
         this.event(by, `stopped ${a?.name ?? 'the agent'}; #${id} is on hold`, id);
@@ -1166,10 +1176,19 @@ export class TaskManagerService {
     const team = this.store.team();
     const idle = team.filter((a) => a.state === 'idle' && !a.paused);
     if (!idle.length) return;
-    const queued = this.store
-      .all()
-      .filter((t) => t.status === 'open' && t.dispatchRequested && this.unmetDeps(t).length === 0)
+    // What a free agent may pick up: tasks someone started, and, with autostart, any open task that is not
+    // parked on hold and not waiting on another task. Most urgent first: priority, then ETA, then age.
+    const all = this.store.all();
+    const queued = all
+      .filter((t) => t.status === 'open' && !t.hold && (t.dispatchRequested || this.cfg.autostart) && this.unmetDeps(t).length === 0)
       .sort((a, b) => a.priority - b.priority || (a.eta ?? Infinity) - (b.eta ?? Infinity) || a.id - b.id);
+    /** The agent that knows this corner best: worked on this task, its parent, or a sibling. */
+    const familiar = (t: Task): string[] => {
+      const names = t.runs.map((r) => r.agent);
+      const kin = all.filter((x) => x.id !== t.id && (x.id === t.parentId || (t.parentId !== undefined && x.parentId === t.parentId)));
+      for (const k of kin) names.push(...k.runs.map((r) => r.agent), ...(k.agent ? [k.agent] : []));
+      return [...new Set(names)].reverse();
+    };
     for (const t of queued) {
       if (this.quotaHold()) {
         if (t.status === 'open') {
@@ -1181,11 +1200,21 @@ export class TaskManagerService {
         }
         continue;
       }
-      let agent = t.agent ? idle.find((a) => a.name === t.agent) : idle.find((a) => !queued.some((o) => o.agent === a.name && o.id !== t.id)) ?? idle[0];
+      const free = idle.filter((a) => !queued.some((o) => o.agent === a.name && o.id !== t.id));
+      let agent = t.agent
+        ? idle.find((a) => a.name === t.agent)
+        : familiar(t).map((n) => free.find((a) => a.name === n)).find(Boolean) ?? free[0] ?? idle[0];
       if (!agent) continue;
       if (t.agent && agent.name !== t.agent) continue;
       idle.splice(idle.indexOf(agent), 1);
       agent = this.agent(agent.name)!;
+      if (!t.dispatchRequested) {
+        // Nobody asked for this one yet: the task manager is filling a free agent's hands.
+        t.dispatchRequested = true;
+        this.store.save(t);
+        this.event('task manager', `started on ${agent.name}, who was free`, t.id);
+        this.inbox('info', `For your awareness, no action needed: ${agent.name} was free, so the task manager started #${t.id} ${t.title} on it${t.priority <= 1 ? ' (high priority)' : ''}. Put a task on hold if it should wait.`, t.id);
+      }
       this.startRun(t, agent);
       if (!idle.length) break;
     }
