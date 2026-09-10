@@ -1558,14 +1558,21 @@ export class TaskManagerService {
     return file;
   }
 
-  /** A linked worktree keeps refs and locks in the main repository, outside the worktree folder. */
+  /**
+   * A task's checkout and a linked worktree's shared Git directory both have to be writable.
+   * Codex normally treats its current directory as writable, but its project boundary can still
+   * come from the conversation that launched it. Naming the checkout explicitly keeps a task
+   * that lives outside the GM's repository folder writable as well.
+   */
   private writableRootsFor(cwd: string): string[] {
+    const roots = [cwd];
     try {
       const raw = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
-      if (!raw) return [];
-      return [path.isAbsolute(raw) ? raw : path.resolve(cwd, raw)];
+      if (!raw) return roots;
+      roots.push(path.isAbsolute(raw) ? raw : path.resolve(cwd, raw));
+      return [...new Set(roots)];
     } catch {
-      return [];
+      return roots;
     }
   }
 
@@ -1606,7 +1613,11 @@ export class TaskManagerService {
       prompt = cp ? `${resumeMessage('checkpoint', cp.text, t)}\n\nThe task brief again:\n\n${brief}` : brief;
     } else prompt = brief;
     if (mustRotate) {
-      a.sessionId = randomUUID();
+      // Claude accepts a caller-assigned id for a new conversation. Codex does not: it assigns
+      // the real thread id after launch. Do not persist a temporary UUID for Codex, because if
+      // the first turn ends before that id is learned the automatic nudge will try to resume a
+      // conversation that never existed and put the task straight back in Open.
+      a.sessionId = a.provider === 'codex' ? undefined : randomUUID();
       a.sessionCwd = cwd;
       a.rotateSession = false;
     }
@@ -1623,7 +1634,10 @@ export class TaskManagerService {
         cwd,
         prompt,
         systemPrompt: `You are ${a.name}, a task agent. Follow the task brief you were given. Use the task tools to ask, note, report and checkpoint; never end a task without reporting or asking.`,
-        sessionId: a.sessionId!,
+        // A fresh Codex launch ignores this value; keeping the placeholder local prevents it
+        // from ever becoming continuation state. `learnSessionId` replaces it with Codex's real
+        // thread id before any legitimate resume.
+        sessionId: a.sessionId ?? randomUUID(),
         resume,
         mcpConfigPath: mcp.file,
         mcpCommand: mcp.command,
