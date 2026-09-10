@@ -1564,8 +1564,14 @@ export class TaskManagerService {
    * come from the conversation that launched it. Naming the checkout explicitly keeps a task
    * that lives outside the GM's repository folder writable as well.
    */
-  private writableRootsFor(cwd: string): string[] {
+  private writableRootsFor(cwd: string, task: Task): string[] {
     const roots = [cwd];
+    /** A continuation may deliberately finish work in its parent's existing checkout rather
+     * than create a second branch. Give it that one checkout, not the whole worktree folder. */
+    const parent = task.parentId === undefined ? undefined : this.store.get(task.parentId);
+    for (const worktree of [task.worktree, parent?.worktree]) {
+      if (worktree && fs.existsSync(worktree)) roots.push(worktree);
+    }
     try {
       const raw = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
       if (!raw) return roots;
@@ -1645,7 +1651,7 @@ export class TaskManagerService {
         allow: this.cfg.allow,
         permissionMode: this.cfg.permissionMode,
         extraEnv: ws?.env ?? {},
-        writableRoots: this.writableRootsFor(cwd),
+        writableRoots: this.writableRootsFor(cwd, t),
         compactAt: this.cfg.compactAt,
         compactEnv: this.cfg.compactEnv,
         logPath: run.log!,
