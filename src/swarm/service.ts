@@ -221,7 +221,13 @@ export class TaskManagerService {
       const t = agent?.taskId !== undefined ? this.store.get(agent.taskId) : undefined;
       if (t) {
         const run = t.runs.find((r) => !r.endedAt);
-        if (agent && run) this.learnSessionId(agent, run);
+        if (agent && run) {
+          this.learnSessionId(agent, run);
+          // Preserve the real Codex thread before the team snapshot below is loaded. Without
+          // this save, a coordinator restart overwrites it with the pre-launch value and the
+          // next run either loses its context or tries to resume a placeholder UUID.
+          this.saveAgent(agent);
+        }
         this.closeRun(t, 'paused', 'task manager stopped');
         if (t.status === 'in_progress') {
           t.status = 'open';
