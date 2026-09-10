@@ -16,6 +16,8 @@ export interface AgentLaunch {
   allow: string[];
   permissionMode: string;
   extraEnv: Record<string, string>;
+  /** Extra paths the workspace sandbox must write, such as a worktree's shared Git directory. */
+  writableRoots?: string[];
   compactAt: number;
   compactEnv: string;
   logPath: string;

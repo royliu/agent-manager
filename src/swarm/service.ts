@@ -1541,6 +1541,17 @@ export class TaskManagerService {
     return file;
   }
 
+  /** A linked worktree keeps refs and locks in the main repository, outside the worktree folder. */
+  private writableRootsFor(cwd: string): string[] {
+    try {
+      const raw = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+      if (!raw) return [];
+      return [path.isAbsolute(raw) ? raw : path.resolve(cwd, raw)];
+    } catch {
+      return [];
+    }
+  }
+
   /** Start (or continue) an agent on a task. `message` replaces the brief when resuming mid-task. */
   private startRun(t: Task, a: Agent, message?: string): void {
     if (this.children.has(a.name)) return;
@@ -1603,6 +1614,7 @@ export class TaskManagerService {
         allow: this.cfg.allow,
         permissionMode: this.cfg.permissionMode,
         extraEnv: ws?.env ?? {},
+        writableRoots: this.writableRootsFor(cwd),
         compactAt: this.cfg.compactAt,
         compactEnv: this.cfg.compactEnv,
         logPath: run.log!,

@@ -18,6 +18,10 @@ export const codexAgent: AgentAdapter = {
       // every codex agent died the moment it was resumed. `-c` is accepted by both, and
       // `sandbox_mode` takes read-only, workspace-write or danger-full-access.
       '-c', `sandbox_mode=${toml('workspace-write')}`,
+      '-c', 'sandbox_workspace_write.network_access=true',
+      ...(l.writableRoots?.length
+        ? ['-c', `sandbox_workspace_write.writable_roots=[${l.writableRoots.map(toml).join(',')}]`]
+        : []),
       '-c', `mcp_servers.swarm.command=${toml(l.mcpCommand.command)}`,
       '-c', `mcp_servers.swarm.args=[${l.mcpCommand.args.map(toml).join(',')}]`,
       // Task updates are the agent's control channel, not an untrusted external action. Codex
