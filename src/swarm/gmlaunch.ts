@@ -6,8 +6,9 @@ import { profileByName } from '../core/config.js';
 import type { SwarmConfig, SwarmMeta } from './model.js';
 import { modelArg, modelsView } from './models.js';
 import { gmSystemPrompt } from './prompts.js';
+import { saveSwarm } from './registry.js';
 import { Store, writeJsonAtomic } from './store.js';
-import { findClaudeTranscript } from './transcript.js';
+import { findClaudeTranscript, findCodexRollout, newestCodexSession } from './transcript.js';
 
 /** Build the interactive GM session: Claude Code (or Codex) with the swarm tools, hooks and status line. */
 export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfig, opts: { resume: boolean }): { spec: LaunchSpec; sessionId?: string } {
@@ -54,9 +55,26 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
     '-c', `mcp_servers.swarm.args=[${bridge.args.map(toml).join(',')}]`,
   ];
   if (gmModel) args.push('-m', gmModel);
-  if (opts.resume && meta.gmSessionId) args.push('resume', meta.gmSessionId);
+  // Resume only a Codex session that really exists under this profile. A GM stores one session id,
+  // so after a move from Claude Code the stored id is a Claude one, and Codex answers "No saved
+  // session found with ID …" and exits instead of starting fresh.
+  const canResume = opts.resume && !!meta.gmSessionId && !!findCodexRollout(profile.home, meta.gmSessionId);
+  if (canResume) args.push('resume', meta.gmSessionId!);
   else args.push(`${prompt}\n\nAt the start of every turn, read your inbox (inbox_read) before anything else. Introduce yourself to the owner in one short paragraph and ask what they want to get done.`);
   const spec = provider.launch(profile.home, args);
   spec.env.AM_GM = meta.name;
   return { spec };
+}
+
+/**
+ * Codex has no hook that can tell us its session id, so we look afterwards for the session that ran
+ * in the GM's folder while it was open. Without this a Codex GM starts a blank conversation every time.
+ */
+export function rememberCodexSession(meta: SwarmMeta, profile: Profile, startedAt: number): void {
+  if (profile.provider !== 'codex') return;
+  const id = newestCodexSession(profile.home, meta.dir, startedAt);
+  if (!id || id === meta.gmSessionId) return;
+  meta.gmSessionId = id;
+  new Store(meta.name).saveMeta(meta);
+  saveSwarm(meta);
 }

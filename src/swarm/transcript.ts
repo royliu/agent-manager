@@ -177,3 +177,82 @@ export function describeTool(name: string, input: Record<string, unknown>): stri
     }
   }
 }
+
+/**
+ * Codex keeps one file per session at `sessions/<year>/<month>/<day>/rollout-<time>-<id>.jsonl`.
+ * Finding it is how we tell a Codex session id from a Claude Code one: the same GM stores only one
+ * id, so after a move between the two the stored id belongs to the other tool.
+ */
+export function findCodexRollout(home: string, sessionId: string): string | undefined {
+  const tail = `-${sessionId}.jsonl`;
+  return walkCodexSessions(home, (file, name) => (name.endsWith(tail) ? file : undefined));
+}
+
+/** The newest Codex session that ran in `cwd` and was written since `since`: the GM's own, just ended. */
+export function newestCodexSession(home: string, cwd: string, since: number): string | undefined {
+  let best: { id: string; at: number } | undefined;
+  walkCodexSessions(home, (file, name) => {
+    if (!name.startsWith('rollout-')) return undefined;
+    let at: number;
+    try {
+      at = fs.statSync(file).mtimeMs;
+    } catch {
+      return undefined;
+    }
+    if (at < since || (best && at <= best.at)) return undefined;
+    const meta = codexSessionMeta(file);
+    if (meta && meta.cwd === cwd) best = { id: meta.id, at };
+    return undefined;
+  });
+  return best?.id;
+}
+
+/** Every session file under a Codex home, three folders deep; the first answer that is not undefined wins. */
+function walkCodexSessions(home: string, seen: (file: string, name: string) => string | undefined): string | undefined {
+  const walk = (dir: string, depth: number): string | undefined => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return undefined;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (depth <= 0) continue;
+        const hit = walk(full, depth - 1);
+        if (hit) return hit;
+        continue;
+      }
+      if (!e.name.endsWith('.jsonl')) continue;
+      const hit = seen(full, e.name);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  return walk(path.join(home, 'sessions'), 3);
+}
+
+/** The session id and the folder it ran in, off the file's first line, without reading the whole session. */
+function codexSessionMeta(file: string): { id: string; cwd: string } | undefined {
+  let head: string;
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(65536);
+      head = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return undefined;
+  }
+  try {
+    const payload = (JSON.parse(head.split('\n', 1)[0] ?? '') as { payload?: { session_id?: unknown; cwd?: unknown } }).payload;
+    const id = typeof payload?.session_id === 'string' ? payload.session_id : undefined;
+    const cwd = typeof payload?.cwd === 'string' ? payload.cwd : undefined;
+    return id && cwd ? { id, cwd } : undefined;
+  } catch {
+    return undefined;
+  }
+}

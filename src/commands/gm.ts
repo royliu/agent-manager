@@ -4,7 +4,7 @@ import { profileByName } from '../core/config.js';
 import { runForeground } from '../core/exec.js';
 import { tildify } from '../core/paths.js';
 import { ensureService, serviceRunning, TmClient } from '../swarm/client.js';
-import { buildGmLaunch } from '../swarm/gmlaunch.js';
+import { buildGmLaunch, rememberCodexSession } from '../swarm/gmlaunch.js';
 import { agentRole, describeAgentProfile, describeModel, modelsView, resolveAgentProfile, resolveModel } from '../swarm/models.js';
 import { swarmPaths } from '../swarm/paths.js';
 import { listSwarms, loadSwarmConfig, removeSwarm, resolveSwarmName, saveSwarm } from '../swarm/registry.js';
@@ -42,7 +42,9 @@ export async function gmCommand(name: string | undefined): Promise<void> {
   console.log(`  ${dim(`▸ back to ${meta.name} in ${meta.dir}`)}`);
   closePrompts();
   process.chdir(meta.dir);
+  const startedAt = Date.now();
   process.exitCode = await runForeground(spec);
+  rememberCodexSession(meta, profile, startedAt);
 }
 
 /** `am gm ls` */

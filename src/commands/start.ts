@@ -3,7 +3,7 @@ import path from 'node:path';
 import { runForeground } from '../core/exec.js';
 import { getProvider, readIdentitySafe } from '../providers/index.js';
 import { ensureService, withClient } from '../swarm/client.js';
-import { buildGmLaunch } from '../swarm/gmlaunch.js';
+import { buildGmLaunch, rememberCodexSession } from '../swarm/gmlaunch.js';
 import type { Agent, SwarmMeta, Workspace } from '../swarm/model.js';
 import { describeAgentProfile, modelNameNote, modelsLines, normalizeModelValue, resolveAgentProfile, type ModelsView } from '../swarm/models.js';
 import { ensureSwarmDirs } from '../swarm/paths.js';
@@ -191,7 +191,9 @@ export async function startCommand(profileName: string, nameArg: string | undefi
   }
   closePrompts();
   process.chdir(dir);
+  const startedAt = Date.now();
   const code = await runForeground(spec);
+  rememberCodexSession(meta, profile, startedAt);
   console.log('');
   console.log(`  ${dim(`${meta.name}'s team keeps working in the background.`)} ${cyan('am gm')} ${dim('to come back ·')} ${cyan('am board')} ${dim('for the board ·')} ${cyan('am gm stop')} ${dim('to stop the team')}`);
   process.exitCode = code;
