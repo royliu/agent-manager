@@ -12,7 +12,12 @@ export const codexAgent: AgentAdapter = {
   spawn(l: AgentLaunch): ChildProcess {
     const prompt = l.resume ? l.prompt : `${l.systemPrompt}\n\n${l.prompt}`;
     const common = [
-      '--json', '--skip-git-repo-check', '-s', 'workspace-write',
+      '--json', '--skip-git-repo-check',
+      // The sandbox goes in as a config override rather than as `-s`: `codex exec` accepts
+      // that flag but `codex exec resume` rejects it ("unexpected argument '-s' found"), so
+      // every codex agent died the moment it was resumed. `-c` is accepted by both, and
+      // `sandbox_mode` takes read-only, workspace-write or danger-full-access.
+      '-c', `sandbox_mode=${toml('workspace-write')}`,
       '-c', `mcp_servers.swarm.command=${toml(l.mcpCommand.command)}`,
       '-c', `mcp_servers.swarm.args=[${l.mcpCommand.args.map(toml).join(',')}]`,
     ];
