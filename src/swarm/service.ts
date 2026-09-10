@@ -230,7 +230,7 @@ export class TaskManagerService {
         }
       }
       try {
-        child.kill('SIGTERM');
+        this.terminateChild(agentName, child);
       } catch {
         /* gone */
       }
@@ -1483,12 +1483,23 @@ export class TaskManagerService {
   }
 
   // --------------------------------------------------------------- processes
+  private terminateChild(name: string, child: ChildProcess): void {
+    const a = this.agent(name);
+    if (a?.provider === 'codex' && child.pid) {
+      // Codex's npm launcher has a native child. Signal the whole detached group so neither the
+      // model process nor its task bridge survives a stop and keeps editing the same worktree.
+      process.kill(-child.pid, 'SIGTERM');
+      return;
+    }
+    child.kill('SIGTERM');
+  }
+
   private killAgent(name: string, why: string): void {
     const child = this.children.get(name);
     if (child) {
       this.children.delete(name);
       try {
-        child.kill('SIGTERM');
+        this.terminateChild(name, child);
       } catch {
         /* gone */
       }

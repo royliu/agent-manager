@@ -34,7 +34,9 @@ export const codexAgent: AgentAdapter = {
     const env = buildEnv('codex', l.profileHome, { ...process.env, ...l.extraEnv });
     const log = fs.openSync(l.logPath, 'a');
     fs.writeSync(log, `\n--- ${new Date().toISOString()} codex ${l.resume ? 'resume' : 'start'} ${l.resume ? l.sessionId : ''}\n`);
-    const child = spawn('codex', args, { cwd: l.cwd, env, stdio: ['ignore', log, log] });
+    // Give each worker its own process group. The npm launcher starts a native Codex child;
+    // stopping only the launcher can otherwise leave that child running in the worktree.
+    const child = spawn('codex', args, { cwd: l.cwd, env, stdio: ['ignore', log, log], detached: true });
     child.on('exit', () => fs.closeSync(log));
     return child;
   },
