@@ -180,20 +180,26 @@ export class TaskManagerService {
       fs.writeFileSync(p.pid, String(process.pid));
       this.log(`task manager for ${this.name} listening`);
     });
-    // Anything that was "working" when we last died is not working now.
+    // This process owns no workers yet. Recover every in-progress task, even if a previous
+    // coordinator left the agent row idle before it died.
     const team = this.store.team();
+    for (const t of this.store.all()) {
+      if (t.status !== 'in_progress') continue;
+      const a = t.agent ? team.find((candidate) => candidate.name === t.agent) : undefined;
+      const run = t.runs.find((candidate) => !candidate.endedAt);
+      if (a && run) this.learnSessionId(a, run);
+      this.closeRun(t, 'paused', 'task manager restarted');
+      t.status = 'open';
+      t.dispatchRequested = true;
+      this.store.save(t);
+      if (a) {
+        a.state = 'idle';
+        a.taskId = undefined;
+      }
+    }
     for (const a of team) {
       if (a.state === 'working' || a.state === 'compacting') {
         a.state = 'idle';
-        const t = a.taskId !== undefined ? this.store.get(a.taskId) : undefined;
-        if (t && t.status === 'in_progress') {
-          const run = t.runs.find((r) => !r.endedAt);
-          if (run) this.learnSessionId(a, run);
-          this.closeRun(t, 'paused', 'task manager restarted');
-          t.status = 'open';
-          t.dispatchRequested = true;
-          this.store.save(t);
-        }
         a.taskId = undefined;
       }
     }
