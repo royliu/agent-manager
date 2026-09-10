@@ -1,5 +1,4 @@
 import { execFileSync, type ChildProcess } from 'node:child_process';
-import { servicePid } from './client.js';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -134,8 +133,7 @@ export class TaskManagerService {
         } catch {
           /* unreadable */
         }
-        const live = servicePid(this.name);
-        if (live !== undefined && live === holder && holder !== process.pid) return false;
+        if (holder !== process.pid && this.isLiveTaskManager(holder)) return false;
         try {
           fs.unlinkSync(p.lock);
         } catch {
@@ -146,18 +144,27 @@ export class TaskManagerService {
     return false;
   }
 
+  /** Validate the lock holder directly; the pid file may not exist yet during a concurrent start. */
+  private isLiveTaskManager(pid: number): boolean {
+    if (!Number.isFinite(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      const cmd = execFileSync('ps', ['-p', String(pid), '-o', 'command='], { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      return (/tm-serve/.test(cmd) && cmd.includes(`--swarm ${this.name}`)) || (/_serve/.test(cmd) && cmd.includes(`--gm ${this.name}`));
+    } catch {
+      return false;
+    }
+  }
+
   listen(): void {
     const p = this.store.paths;
     // The lock is taken before the pid file exists, so two starts in the same instant cannot both proceed.
-    fs.writeFileSync(p.pid, String(process.pid));
     if (!this.acquireLock()) {
       this.log('another task manager for this swarm is already running; exiting');
-      // Put the pid file back to the live one so clients keep working.
-      const live = servicePid(this.name);
-      if (live !== undefined) fs.writeFileSync(p.pid, String(live));
       setTimeout(() => process.exit(0), 10);
       return;
     }
+    fs.writeFileSync(p.pid, String(process.pid));
     try {
       fs.unlinkSync(p.sock);
     } catch {
