@@ -11,12 +11,13 @@ export const codexAgent: AgentAdapter = {
   provider: 'codex',
   spawn(l: AgentLaunch): ChildProcess {
     const prompt = l.resume ? l.prompt : `${l.systemPrompt}\n\n${l.prompt}`;
-    // `sandbox_workspace_write.writable_roots` is useful when a session resumes, but Codex
-    // deliberately protects Git metadata during a fresh launch unless the extra root entered
-    // through the public `--add-dir` option. A linked worktree keeps its index and branch locks
-    // under the main repository's `.git/worktrees/*`, outside the task checkout, so config-only
-    // launches could edit source but failed every `git add` with EPERM. `exec resume` does not
-    // accept `--add-dir`; the roots set on the fresh session persist when that session resumes.
+    // Keep the explicit roots in the launch for path discovery and future Codex policies. Today,
+    // however, workspace-write protects Git metadata even when the repository's `.git` directory
+    // is supplied through `--add-dir`: linked-worktree agents can edit source but every `git add`
+    // still fails at `.git/worktrees/*/index.lock` with EPERM. Task agents are expected to create
+    // their own isolated commits, so they need danger-full-access until Codex offers a narrow Git
+    // metadata write capability. `exec resume` does not accept `--add-dir`; the config roots remain
+    // useful on resumed sessions.
     const addedDirs = !l.resume && l.writableRoots?.length
       ? l.writableRoots.flatMap((root) => ['--add-dir', root])
       : [];
@@ -26,7 +27,7 @@ export const codexAgent: AgentAdapter = {
       // that flag but `codex exec resume` rejects it ("unexpected argument '-s' found"), so
       // every codex agent died the moment it was resumed. `-c` is accepted by both, and
       // `sandbox_mode` takes read-only, workspace-write or danger-full-access.
-      '-c', `sandbox_mode=${toml('workspace-write')}`,
+      '-c', `sandbox_mode=${toml('danger-full-access')}`,
       '-c', 'sandbox_workspace_write.network_access=true',
       ...addedDirs,
       ...(l.writableRoots?.length
