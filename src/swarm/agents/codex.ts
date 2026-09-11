@@ -11,6 +11,15 @@ export const codexAgent: AgentAdapter = {
   provider: 'codex',
   spawn(l: AgentLaunch): ChildProcess {
     const prompt = l.resume ? l.prompt : `${l.systemPrompt}\n\n${l.prompt}`;
+    // `sandbox_workspace_write.writable_roots` is useful when a session resumes, but Codex
+    // deliberately protects Git metadata during a fresh launch unless the extra root entered
+    // through the public `--add-dir` option. A linked worktree keeps its index and branch locks
+    // under the main repository's `.git/worktrees/*`, outside the task checkout, so config-only
+    // launches could edit source but failed every `git add` with EPERM. `exec resume` does not
+    // accept `--add-dir`; the roots set on the fresh session persist when that session resumes.
+    const addedDirs = !l.resume && l.writableRoots?.length
+      ? l.writableRoots.flatMap((root) => ['--add-dir', root])
+      : [];
     const common = [
       '--json', '--skip-git-repo-check',
       // The sandbox goes in as a config override rather than as `-s`: `codex exec` accepts
@@ -19,6 +28,7 @@ export const codexAgent: AgentAdapter = {
       // `sandbox_mode` takes read-only, workspace-write or danger-full-access.
       '-c', `sandbox_mode=${toml('workspace-write')}`,
       '-c', 'sandbox_workspace_write.network_access=true',
+      ...addedDirs,
       ...(l.writableRoots?.length
         ? ['-c', `sandbox_workspace_write.writable_roots=[${l.writableRoots.map(toml).join(',')}]`]
         : []),
