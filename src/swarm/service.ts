@@ -597,6 +597,18 @@ export class TaskManagerService {
 
   private reassign(id: number, agentName: string, by: string): Task {
     const t = this.task(id);
+    // "none" (or an empty name) clears the pin: the task goes to the first free agent when it is
+    // released, instead of waiting for one particular agent (owner, 11 Sep: a paused or open task
+    // must not keep its previous agent reserved).
+    if (agentName === '' || agentName === 'none') {
+      if (t.status === 'in_progress') throw new RpcError(`#${id} is in progress on ${t.agent}; stop it before unassigning`);
+      const was = t.agent;
+      t.agent = undefined;
+      this.store.save(t);
+      this.event(by, `unassigned${was ? ` (was ${was})` : ''}`, id);
+      this.changed(id);
+      return t;
+    }
     if (!this.agent(agentName)) throw new RpcError(`no agent named ${agentName}`);
     const prev = t.agent;
     if (t.status === 'in_progress' && prev) {
