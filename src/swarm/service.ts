@@ -1590,7 +1590,14 @@ export class TaskManagerService {
 
   /** Start (or continue) an agent on a task. `message` replaces the brief when resuming mid-task. */
   private startRun(t: Task, a: Agent, message?: string): void {
-    if (this.children.has(a.name)) return;
+    const running = this.children.get(a.name);
+    if (running) {
+      // A child that has already exited must not block the agent forever. The exit handler only
+      // deletes the entry when the exiting child is the stored one; two quick dispatches can leave
+      // a dead child in the map (11 Sep: friday-4 idle on the board, never given a task again).
+      if (running.exitCode === null && running.signalCode === null) return;
+      this.children.delete(a.name);
+    }
     const prof = profileByName(a.profile);
     if (!prof) {
       this.inbox('note', `Agent ${a.name} points at a profile that no longer exists (${a.profile}).`);
