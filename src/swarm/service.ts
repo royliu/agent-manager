@@ -1706,9 +1706,13 @@ export class TaskManagerService {
     const run = t.runs.find((r) => r.id === runId);
     if (!run) return;
     if (run.endedAt) {
-      // Closed by cancel/stop/reassign already. Only reset the agent if it has not moved on to another run.
+      // Closed by cancel/stop/reassign already. Reset the agent unless it has moved on to another
+      // open run. This must not depend on a.taskId matching THIS run: a stop, a reassign to another
+      // agent and a quick second dispatch can leave a.taskId pointing at a different task whose run
+      // is also closed, and the agent then stays "working" forever with nothing running (11 Sep,
+      // friday-4 stuck on #193 while friday-3 ran it; the profile move was refused for it).
       const busyElsewhere = this.store.all().some((x) => x.runs.some((r) => !r.endedAt && r.agent === agentName));
-      if (a.taskId === taskId && !busyElsewhere) {
+      if (!busyElsewhere) {
         a.state = a.paused ? 'paused' : 'idle';
         a.taskId = undefined;
         this.saveAgent(a);
