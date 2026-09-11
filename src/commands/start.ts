@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { runForeground } from '../core/exec.js';
 import { getProvider, readIdentitySafe } from '../providers/index.js';
-import { ensureService, withClient } from '../swarm/client.js';
+import { ensureService, serviceRunning, TmClient, withClient } from '../swarm/client.js';
 import { buildGmLaunch, rememberCodexSession } from '../swarm/gmlaunch.js';
 import type { Agent, SwarmMeta, Workspace } from '../swarm/model.js';
 import { describeAgentProfile, modelNameNote, modelsLines, normalizeModelValue, resolveAgentProfile, type ModelsView } from '../swarm/models.js';
@@ -138,6 +138,33 @@ export async function startCommand(profileName: string, nameArg: string | undefi
     meta = newMeta;
   }
 
+  // `am gm start <profile>` on a GM that already exists must record the profile it was started on.
+  // Only a brand-new GM ever stored one, so the board kept naming the profile the GM was CREATED
+  // with, and everything on the server side kept using that one — above all the task manager, which
+  // starts its own sessions out of it. On 11 September that had the task manager answering from a
+  // profile whose weekly limit had run out while the GM itself ran happily on another, and every
+  // question the team asked went unanswered.
+  if (!fresh && (meta.profile !== profile.name || meta.provider !== profile.provider)) {
+    const was = meta.profile;
+    meta.profile = profile.name;
+    meta.provider = profile.provider;
+    new Store(meta.name).saveMeta(meta);
+    saveSwarm(meta);
+    // The task manager reads the profile once, when it starts, so it has to come back to see this.
+    // Wait for it to really be gone: a second one started too early exits and leaves the old one up.
+    if (serviceRunning(meta.name)) {
+      const c = new TmClient(meta.name);
+      try {
+        await c.connect();
+        await c.call('shutdown');
+      } catch {
+        /* the socket closes as it stops */
+      }
+      c.close();
+      for (let i = 0; i < 50 && serviceRunning(meta.name); i += 1) await new Promise((r) => setTimeout(r, 100));
+    }
+    console.log(`  ${green('✓')} profile moved from ${was} to ${profile.name}; the task manager comes back on it`);
+  }
   await ensureService(meta.name);
   // Model flags are remembered for this GM; "default" clears one so the profile's model applies again.
   const modelFlags: Record<string, string> = {};
