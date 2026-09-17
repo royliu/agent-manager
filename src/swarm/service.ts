@@ -1115,6 +1115,12 @@ export class TaskManagerService {
       this.store.save(t);
       return waiting.map((q) => `Notice from the task manager: your question on #${t.id} was answered while you worked. Question: "${q.question}" Answer (${q.answeredBy ?? 'the task manager'}): ${q.answer}`).join('\n\n');
     }
+    if (a.workspaceNotice) {
+      const what = a.workspaceNotice;
+      a.workspaceNotice = undefined;
+      this.saveAgent(a);
+      return `Notice from the task manager: the workspace changed while you worked: ${what}\n\nThese are the owner's current conventions; they win over anything older, including this task's own notes. Adapt and carry on.`;
+    }
     if (t && !t.eta && t.status === 'in_progress') {
       return `Notice from the task manager: #${t.id} has no eta. Set one now with task_eta ("2h", "1d", or a date and time) and refine it as you learn more.`;
     }
@@ -1238,11 +1244,22 @@ export class TaskManagerService {
     ws.updatedAt = this.now();
     this.store.saveWorkspace(ws);
     this.event(this.gm(), `workspace updated: ${[ws.branch && `branch ${ws.branch}`, ws.notes, typeof p.brief === 'string' ? 'project brief' : ''].filter(Boolean).join(' · ')}`);
-    // Agents mid-task learn about it through their next tool result; the next start carries the new brief.
-    for (const a of this.store.team()) {
-      if (a.state === 'working') {
+    // Only what agents work from counts as a change for them: the project brief is the task manager's.
+    const touched = ['branch', 'notes', 'dir', 'env'].some((k) => p[k] !== undefined);
+    if (touched) {
+      const what = [ws.branch && `branch ${ws.branch}`, ws.notes].filter(Boolean).join(' · ');
+      // A run already going gets it in its next tool result, once; the next start carries the new brief.
+      for (const a of this.store.team()) {
+        if (a.state !== 'working' && a.state !== 'compacting') continue;
         const t = a.taskId !== undefined ? this.store.get(a.taskId) : undefined;
-        if (t) this.note(t, this.gm(), 'context', `Workspace changed: ${[ws.branch && `branch ${ws.branch}`, ws.notes].filter(Boolean).join(' · ')}`), this.store.save(t);
+        if (t) {
+          this.note(t, this.gm(), 'context', `Workspace changed: ${what}`);
+          this.store.save(t);
+        }
+        if (this.runAlive(a.name)) {
+          a.workspaceNotice = what.slice(0, 4000);
+          this.saveAgent(a);
+        }
       }
     }
     this.changed();
@@ -1723,6 +1740,8 @@ export class TaskManagerService {
       cwd,
       gmName: this.gm(),
       compactAt: this.cfg.compactAt,
+      verify: this.cfg.verify,
+      testsFirst: this.cfg.testsFirst,
     });
     // Session continuity: keep the agent's session unless it must rotate or the folder changed.
     // Also start fresh when the agent's last session is already over the line: a new task must not inherit a full window.

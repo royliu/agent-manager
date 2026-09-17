@@ -169,7 +169,7 @@ You see two things: Friday and the board. Everything else is Friday's business.
 | `am board [name] [-g status\|agent\|eta] [--json]` | the board, live |
 | `am task ls\|show\|add\|note\|eta\|answer\|approve\|reject\|stop\|start\|hold\|assign\|cancel\|retry #id …` | act on a task from the shell (`--gm <name>` from elsewhere) |
 | `am agent ls\|add\|rm\|move` | the task agents (add one on another profile: `am agent add --profile work`) |
-| `am config [group.key] [value]` | for every GM: `model.gm` `model.tm` `model.agents` `profile.agents` `team.size` `gm.propose` `tm.answers` `agent.compact-at` `limits.budget-usd` … (`default` clears) |
+| `am config [group.key] [value]` | for every GM: `model.gm` `model.tm` `model.agents` `profile.agents` `team.size` `gm.propose` `tm.answers` `task.verify` `agent.compact-at` `limits.budget-usd` … (`default` clears) |
 
 **Board keys.** `↑↓←→` move · `⏎` open a task · `g` group by status, agent or ETA · `s` sort ·
 `d` hide done · `/` filter · `r` reply to a question · `a` approve · `x` send back with

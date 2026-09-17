@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0 · 2026-09-17
+
+- Agents verify what they changed, not the whole project. The brief asked every agent to verify before reporting and said nothing about how much, so each one reached for the broadest check it could find: on a four-agent team that meant four full suite runs, in four worktrees, for a one-line change (genie, 17 Sep: a one-block style fix took 27 minutes to build and 94 minutes to prove). The default is now `task.verify targeted` — the checks covering the files it touched, plus the project's own quick check, with the whole suite reserved for tasks whose notes or workspace conventions ask for it — and the report has to name exactly what was run. `am config task.verify full` restores the old behaviour; `conventions` leaves scope out of the brief for a project whose own rules already cover it.
+- `am config task.tests-first on` puts the check first: for work that changes behaviour the agent writes the test, runs it once to see it fail, then makes it pass, and a check written that way needs no separate proof that it can fail. Off by default, and visual work is exempt in the wording, since a check written only to satisfy a rule becomes tomorrow's known failure.
+- A workspace change now reaches agents that are already running. Conventions set with `workspace_update` only ever arrived with the next task brief, so a rule set at 07:20 did not reach an agent that started at 07:13 until its task ended, hours later. A live run is now told once, in its next tool result, that the conventions changed and that they win over anything older. Changing only the project brief no longer counts as a workspace change for agents.
+
 ## 0.9.1 · 2026-09-17
 
 - Moving a GM to another profile now clears the models set for it. A model set for one GM beat the profile's own, so a GM moved from an OpenRouter profile to a subscription one kept asking for an OpenRouter id, and Claude Code answered "There's an issue with the selected model" on every turn (17 Sep). `am gm start <profile> <gm>` on a GM that ran elsewhere now drops the GM's and the task manager's models and says so; `--gm-model` or `--tm-model` on the same command still set one.

@@ -131,6 +131,10 @@ export interface BriefInput {
   cwd: string;
   gmName: string;
   compactAt: number;
+  /** How much to run before reporting: see SwarmConfig.verify. */
+  verify: 'targeted' | 'full' | 'conventions';
+  /** Write the check before the change, for work that changes behaviour. */
+  testsFirst: boolean;
 }
 
 /** Every note, but only the latest checkpoint: earlier ones are superseded and would only grow the brief. */
@@ -177,7 +181,15 @@ export function agentBrief(b: BriefInput): string {
   lines.push(`- Stay inside the workspace folder. Do not push, merge, or touch other tasks' worktrees.`);
   lines.push(`- Within your first few steps, confirm or refine when you expect to be done (task.eta); every task carries an eta the owner can see. Report progress after each significant step (task.progress): one short sentence plus your honest percent done; the owner sees it as a progress bar. Record findings and decisions as notes (task.note).`);
   lines.push(`- When a decision matters and you cannot settle it from the notes, ask (task.ask) instead of guessing. The task manager answers most questions within a minute or two, reasoning from the owner's intent. Give all five parts: about, known, question, options, default. A question without them is refused. After asking, stop and end your reply; you will be continued with the answer.`);
-  lines.push(`- When finished, report (task.report) with: what changed, how you verified it, what is left, anything to watch. Do not report done without verifying.`);
+  if (b.testsFirst) {
+    lines.push(`- For anything that changes behaviour, write the check first: add or change the test that should pass once the task is done, run it once to see it fail, then make it pass. Name the failing run and the passing one in your report; a check you wrote this way needs no separate proof that it can fail. Where the change is visual, or the project has no check for that kind of work, skip this and say so in your report.`);
+  }
+  if (b.verify === 'targeted') {
+    lines.push(`- Verify what you changed, not the whole project: the checks covering the files you touched, and the project's own quick check (a type check or a build) if it has one. Run the whole test suite only when this task's notes or the workspace conventions ask for it, or when what you changed is what the suite covers. A full run costs the owner money and a machine everyone else is sharing.`);
+  } else if (b.verify === 'full') {
+    lines.push(`- Verify with the project's full checks before reporting: the whole test suite, and any type check or build it has.`);
+  }
+  lines.push(`- When finished, report (task.report) with: what changed, how you verified it (name exactly what you ran), what is left, anything to watch. Do not report done without verifying.`);
   lines.push(`- If a tool result tells you your context is at ${b.compactAt}% or more, immediately write a checkpoint (task.checkpoint): what is done, what is left, the next step, decisions and why. Then refresh your project memory (memory.update) and end your reply; you will be continued with a fresh context from the checkpoint.`);
   lines.push('');
   lines.push(PLAIN_ENGLISH);

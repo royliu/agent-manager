@@ -139,6 +139,8 @@ export const AgentSchema = z.object({
   compactRequestedAt: z.number().optional(),
   paused: z.boolean().default(false),
   usdToday: z.number().default(0),
+  /** A workspace change that arrived while this agent's run was going; handed over once, in its next tool result. */
+  workspaceNotice: z.string().optional(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
 
@@ -228,6 +230,14 @@ export const SwarmConfigSchema = z.object({
   hud: z.boolean().default(true),
   /** Environment variable that pins the tool's own auto-compaction threshold, if it has one. */
   compactEnv: z.string().default('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE'),
+  /**
+   * How much an agent runs before it reports a task done. targeted (default): what it changed, and the
+   * project's own check command. full: the whole suite every time. conventions: whatever the workspace
+   * conventions say, with nothing about scope in the brief.
+   */
+  verify: z.enum(['targeted', 'full', 'conventions']).default('targeted'),
+  /** Agents write the check before the change for work that changes behaviour, and see it fail first. */
+  testsFirst: z.boolean().default(false),
 });
 export type SwarmConfig = z.infer<typeof SwarmConfigSchema>;
 

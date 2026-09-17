@@ -205,6 +205,18 @@ you and what does not. The task manager reasons from it when it answers the team
 more you tell Friday about intent, the fewer questions come back to you. You can ask Friday
 to record decisions and acceptance criteria as notes on a task.
 
+**How much an agent runs before it reports.** By default each agent verifies what it changed:
+the checks covering the files it touched, plus the project's own quick check, and it names in
+its report exactly what it ran. It runs the whole test suite only when the task's notes or the
+workspace conventions ask for it. Without this an agent picks the broadest check it can find,
+and four agents each run the whole suite in their own worktree for a one-line change.
+`am config task.verify full` restores a full run every time; `conventions` leaves scope out of
+the brief entirely, for a project whose conventions already say it. With
+`am config task.tests-first on`, work that changes behaviour starts with the check: the agent
+writes it, runs it once to see it fail, then makes it pass, and a check written that way needs
+no separate proof that it can fail. Visual work is exempt, since a check written to satisfy a
+rule becomes tomorrow's known failure.
+
 **Plan first.** For anything large or risky, tell Friday "plan first": the agent writes a
 plan, the task waits for approval on the board, and code only starts after you or Friday
 approve it.
@@ -443,6 +455,8 @@ model each group runs on and where the choice came from: set for this GM, set wi
 | `gm.hud` | true | show the profile's own status line (claude-hud if installed) above Friday's line |
 | `tm.autostart` | true | when an agent frees up, the task manager gives it the next open task by itself; false: only tasks someone started |
 | `tm.answers` | `most` | which questions the task manager answers itself: `most` (reasons and answers, escalates rarely) · `notes` (only what a note settles) · `off` (everything goes to Friday) |
+| `task.verify` | `targeted` | how much an agent runs before reporting a task done: `targeted` (the checks covering what it changed, plus the project's own quick check) · `full` (the whole suite every time) · `conventions` (nothing about scope in the brief; the workspace conventions govern) |
+| `task.tests-first` | false | for work that changes behaviour, the agent writes the check first and runs it once to see it fail before making it pass |
 | `agent.permissions` | `acceptEdits` | Claude Code permission mode for agents |
 | `agent.allow` | Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, the task tools | tools agents may use without asking |
 | `agent.compact-at` | 90 | context percentage at which an agent checkpoints and gets a fresh session |

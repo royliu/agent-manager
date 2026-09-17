@@ -66,6 +66,8 @@ export const CONFIG_KEYS: Array<{ key: string; internal: string; help: string }>
   { key: 'gm.hud', internal: 'hud', help: "show the profile's own status line (claude-hud if installed) above the GM's line" },
   { key: 'tm.autostart', internal: 'autostart', help: 'when an agent frees up, the task manager gives it the next open task by itself (priority, then ETA); false: only tasks someone started' },
   { key: 'tm.answers', internal: 'triage', help: 'which questions the task manager answers itself: most · notes (only what a note settles) · off (all go to the GM)' },
+  { key: 'task.verify', internal: 'verify', help: "how much an agent runs before reporting done: targeted (what it changed, and the project's own check) · full (the whole suite every time) · conventions (whatever the workspace conventions say)" },
+  { key: 'task.tests-first', internal: 'testsFirst', help: 'for work that changes behaviour, the agent writes the check first and sees it fail before making it pass' },
   { key: 'agent.permissions', internal: 'permissionMode', help: 'Claude Code permission mode for agents' },
   { key: 'agent.allow', internal: 'allow', help: 'tools agents may use without asking (a JSON list)' },
   { key: 'agent.compact-at', internal: 'compactAt', help: 'context % at which an agent checkpoints and gets a fresh session' },
