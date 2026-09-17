@@ -95,6 +95,12 @@ export const TaskSchema = z.object({
   eta: z.number().optional(),
   parentId: z.number().optional(),
   dependsOn: z.array(z.number()).default([]),
+  /**
+   * The files this task will change, as repository paths; a trailing slash or * covers everything under it.
+   * Two tasks whose paths overlap are never run at the same time: the second waits until the first is done,
+   * because re-applying onto a line another lane just moved costs more than waiting did.
+   */
+  paths: z.array(z.string()).default([]),
   agent: z.string().optional(),
   /** True once the GM asked for it to be worked; open tasks without it are backlog. */
   dispatchRequested: z.boolean().default(false),

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0 · 2026-09-17
+
+- A task can say which files it will change, and two tasks that would change the same file never run at the same time. `task_create` and `task_update` take `paths` (repository paths; a trailing slash or `*` covers a folder), and when an agent frees up the task manager skips a task whose files a running task already holds, fills the agent with the next one instead, and writes on the skipped task which task it is waiting for. On genie, 17 Sep, this was the largest hidden cost of the day: four lanes landing into one branch made every other lane re-apply its work, and one task re-applied against twenty-one landings — more time than every suite run put together. A task that declares no paths behaves exactly as before, so the rule only ever helps a lane that said what it would touch.
+- The task view shows a task's declared files beside its dependencies.
+
 ## 0.10.0 · 2026-09-17
 
 - Agents verify what they changed, not the whole project. The brief asked every agent to verify before reporting and said nothing about how much, so each one reached for the broadest check it could find: on a four-agent team that meant four full suite runs, in four worktrees, for a one-line change (genie, 17 Sep: a one-block style fix took 27 minutes to build and 94 minutes to prove). The default is now `task.verify targeted` — the checks covering the files it touched, plus the project's own quick check, with the whole suite reserved for tasks whose notes or workspace conventions ask for it — and the report has to name exactly what was run. `am config task.verify full` restores the old behaviour; `conventions` leaves scope out of the brief for a project whose own rules already cover it.

@@ -125,6 +125,34 @@ const MAX_UNSENT_BYTES = 64 * 1024 * 1024;
 /** A subscriber this far behind misses pushes; it re-reads the board when it catches up. */
 const PUSH_SKIP_BYTES = 1024 * 1024;
 
+/** A task's file list, tidied: no leading "./", no empty entries, at most 40 paths. */
+export function readPaths(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const raw of v) {
+    if (typeof raw !== 'string') continue;
+    const p = raw.trim().replace(/^\.\//, '').replace(/^\/+/, '');
+    if (p && !out.includes(p)) out.push(p);
+  }
+  return out.slice(0, 40);
+}
+
+/** Does one declared path cover the other? "a/b/" and "a/b/*" cover everything under a/b. */
+function pathTouches(a: string, b: string): boolean {
+  const norm = (p: string) => p.replace(/\/?\*+$/, '/').replace(/\/+$/, '/');
+  const x = norm(a), y = norm(b);
+  const dirX = x.endsWith('/'), dirY = y.endsWith('/');
+  if (!dirX && !dirY) return x === y;
+  if (dirX && dirY) return x.startsWith(y) || y.startsWith(x);
+  return dirX ? (y + '/').startsWith(x) : (x + '/').startsWith(y);
+}
+
+/** The first file two tasks would both change, or null when they can run side by side. */
+export function pathsClash(a: string[], b: string[]): string | null {
+  for (const x of a) for (const y of b) if (pathTouches(x, y)) return x === y ? x : `${x} and ${y}`;
+  return null;
+}
+
 export class TaskManagerService {
   readonly store: Store;
   readonly meta: SwarmMeta;
@@ -573,6 +601,7 @@ export class TaskManagerService {
       eta,
       parentId,
       dependsOn: deps,
+      paths: readPaths(p.paths),
       agent,
       dispatchRequested: false,
       hold: false,
@@ -620,6 +649,7 @@ export class TaskManagerService {
     if (p.priority !== undefined) t.priority = Math.max(0, Math.min(3, num(p, 'priority')));
     if (p.eta !== undefined) t.eta = this.parseEta(p.eta);
     if (Array.isArray(p.dependsOn)) t.dependsOn = (p.dependsOn as unknown[]).map((d) => Number(String(d).replace(/^#/, ''))).filter((n) => Number.isFinite(n));
+    if (Array.isArray(p.paths)) t.paths = readPaths(p.paths);
     if (typeof p.reviewBy === 'string') t.reviewBy = p.reviewBy === 'gm' ? 'gm' : 'user';
     if (p.planFirst !== undefined) t.planFirst = p.planFirst === true;
     if (p.useWorktree !== undefined) t.useWorktree = p.useWorktree === true;
@@ -1311,6 +1341,9 @@ export class TaskManagerService {
     return !!q && q.usedPercent >= this.cfg.quotaHoldAt;
   }
 
+  /** What the manager has already said about a file clash, so it says it once per pairing. */
+  private clashSaid = new Map<number, number>();
+
   private assign(): void {
     const team = this.store.team();
     const idle = team.filter((a) => a.state === 'idle' && !a.paused);
@@ -1336,6 +1369,24 @@ export class TaskManagerService {
           t.resumeTo = 'open';
           this.store.save(t);
           this.changed(t.id);
+        }
+        continue;
+      }
+      /**
+       * ═══ TWO LANES NEVER EDIT THE SAME FILE AT ONCE ═══ (friday, 17 Sep 2026)
+       *
+       * Re-applying onto a line another lane has just moved cost more time on 17 Sep than every suite run put
+       * together: one task re-applied against twenty-one landings. So a task whose declared files a running task
+       * already holds waits for it, and the manager fills the free agent with the next task instead. A task that
+       * declares no paths is unaffected, so this only ever helps a lane that said what it would touch.
+       */
+      const busy = t.paths.length
+        ? all.find((o) => o.status === 'in_progress' && o.id !== t.id && o.paths.length && pathsClash(t.paths, o.paths))
+        : undefined;
+      if (busy) {
+        if (this.clashSaid.get(t.id) !== busy.id) {
+          this.clashSaid.set(t.id, busy.id);
+          this.event('task manager', `waiting for #${busy.id}: both change ${pathsClash(t.paths, busy.paths)}`, t.id);
         }
         continue;
       }
