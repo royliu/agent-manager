@@ -71,6 +71,11 @@ export function statusLabel(t: Task, gm = 'gm'): string {
   }
 }
 
+/** A task for a one-line list: everything but the notes, questions, runs, report and activity. */
+export function lightTask(t: Task): Task {
+  return { ...t, description: '', notes: [], questions: [], runs: [], report: undefined, activity: [] };
+}
+
 export interface BoardSnapshot {
   meta: SwarmMeta;
   config: SwarmConfig;
@@ -86,10 +91,39 @@ export interface BoardSnapshot {
   takenAt: number;
 }
 
+/**
+ * The board's counts without the task bodies. Status lines, hooks, the MCP bridge and `am team` ask
+ * often and read only these; a whole snapshot is megabytes once a board holds a few hundred tasks.
+ */
+export interface BoardSummary {
+  meta: SwarmMeta;
+  team: Array<Agent & { effectiveModel?: string }>;
+  inboxUnread: number;
+  needYou: number;
+  /** Tasks in progress. */
+  running: number;
+  /** Open tasks waiting for an agent. */
+  queued: number;
+  /** Tasks not yet done or cancelled. */
+  active: number;
+  quota?: BoardSnapshot['quota'];
+  gmContextPct?: number;
+  takenAt: number;
+}
+
 interface Conn {
   sock: net.Socket;
   subscribed: boolean;
 }
+
+/**
+ * Bytes a connection may have waiting to be sent. A reader that falls this far behind (a board asking
+ * for megabyte snapshots faster than it reads them) is dropped instead of growing the heap until the
+ * process dies; the board and bridges reconnect on their own.
+ */
+const MAX_UNSENT_BYTES = 64 * 1024 * 1024;
+/** A subscriber this far behind misses pushes; it re-reads the board when it catches up. */
+const PUSH_SKIP_BYTES = 1024 * 1024;
 
 export class TaskManagerService {
   readonly store: Store;
@@ -291,7 +325,9 @@ export class TaskManagerService {
       return;
     }
     const reply = (r: Response) => {
-      if (!conn.sock.destroyed) conn.sock.write(JSON.stringify(r) + '\n');
+      if (conn.sock.destroyed) return;
+      conn.sock.write(JSON.stringify(r) + '\n');
+      this.dropIfBehind(conn);
     };
     try {
       if (req.method === 'subscribe') {
@@ -309,7 +345,20 @@ export class TaskManagerService {
 
   private push(p: Push): void {
     const line = JSON.stringify(p) + '\n';
-    for (const c of this.conns) if (c.subscribed && !c.sock.destroyed) c.sock.write(line);
+    for (const c of this.conns) {
+      if (!c.subscribed || c.sock.destroyed) continue;
+      if (c.sock.writableLength > PUSH_SKIP_BYTES) continue;
+      c.sock.write(line);
+    }
+  }
+
+  /** Close a connection whose unsent replies have piled up past MAX_UNSENT_BYTES. */
+  private dropIfBehind(conn: Conn): void {
+    const unsent = conn.sock.writableLength;
+    if (unsent <= MAX_UNSENT_BYTES) return;
+    this.log(`dropped a connection with ${Math.round(unsent / 1048576)} MB unsent; it was not reading its replies`);
+    this.conns.delete(conn);
+    conn.sock.destroy();
   }
 
   private changed(taskId?: number): void {
@@ -373,8 +422,10 @@ export class TaskManagerService {
         return 'pong';
       case 'snapshot':
         return this.snapshot();
+      case 'summary':
+        return this.summary();
       case 'task.list':
-        return this.store.all();
+        return p.light === true ? this.store.all().map(lightTask) : this.store.all();
       case 'task.get':
         return this.task(num(p, 'id'));
       case 'task.create':
@@ -459,13 +510,31 @@ export class TaskManagerService {
   }
 
   // ------------------------------------------------------------------ snapshot
+  private gmContextPct(): number | undefined {
+    if (!this.meta.gmSessionId || this.meta.provider !== 'claude-code') return undefined;
+    return readClaudeSession(this.profile.home, this.meta.gmSessionId, windowFor(resolveModel('gm', this.meta, this.cfg, this.profile).model, this.cfg.contextWindow)).contextPct;
+  }
+
+  private summary(): BoardSummary {
+    const tasks = this.store.all();
+    return {
+      meta: this.meta,
+      team: this.store.team().map((a) => ({ ...a, effectiveModel: this.effectiveModel(a) })),
+      inboxUnread: this.store.inbox().filter((i) => !i.read).length,
+      needYou: tasks.filter(needsYou).length,
+      running: tasks.filter((t) => t.status === 'in_progress').length,
+      queued: tasks.filter((t) => t.status === 'open' && t.dispatchRequested).length,
+      active: tasks.filter(isActive).length,
+      quota: this.quotaCache?.value,
+      gmContextPct: this.gmContextPct(),
+      takenAt: this.now(),
+    };
+  }
+
   private snapshot(): BoardSnapshot {
     const tasks = this.store.all();
     const team = this.store.team();
-    let gmContextPct: number | undefined;
-    if (this.meta.gmSessionId && this.meta.provider === 'claude-code') {
-      gmContextPct = readClaudeSession(this.profile.home, this.meta.gmSessionId, windowFor(resolveModel('gm', this.meta, this.cfg, this.profile).model, this.cfg.contextWindow)).contextPct;
-    }
+    const gmContextPct = this.gmContextPct();
     return {
       meta: this.meta,
       config: this.cfg,

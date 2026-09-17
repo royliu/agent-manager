@@ -1,6 +1,6 @@
-import { serviceRunning, TmClient } from './client.js';
+import { readSummary, serviceRunning, TmClient } from './client.js';
 import { listSwarms } from './registry.js';
-import { isActive, needsYou, type BoardSnapshot } from './service.js';
+import { isActive, needsYou, type BoardSummary } from './service.js';
 import { Store } from './store.js';
 
 /** One GM as the home screen shows it. */
@@ -14,14 +14,14 @@ export interface GmRow {
   open: number;
 }
 
-async function snapshotWithin(name: string, ms: number): Promise<BoardSnapshot | undefined> {
+async function summaryWithin(name: string, ms: number): Promise<BoardSummary | undefined> {
   const c = new TmClient(name);
   const timer = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms));
   try {
     return await Promise.race([
       (async () => {
         await c.connect();
-        return c.call<BoardSnapshot>('snapshot');
+        return readSummary(c);
       })(),
       timer,
     ]);
@@ -37,8 +37,12 @@ export async function gmOverview(): Promise<GmRow[]> {
   const rows: GmRow[] = [];
   for (const s of listSwarms()) {
     const running = serviceRunning(s.name);
-    const snap = running ? await snapshotWithin(s.name, 1500) : undefined;
-    const tasks = snap?.tasks ?? new Store(s.name).all();
+    const live = running ? await summaryWithin(s.name, 1500) : undefined;
+    if (live) {
+      rows.push({ name: s.name, profile: s.profile, dir: s.dir, running, needYou: live.needYou, working: live.running, open: live.active });
+      continue;
+    }
+    const tasks = new Store(s.name).all();
     rows.push({
       name: s.name,
       profile: s.profile,

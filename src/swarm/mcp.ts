@@ -1,4 +1,4 @@
-import { openClient, type TmClient } from './client.js';
+import { openClient, readSummary, type TmClient } from './client.js';
 import type { Agent, InboxItem, Task } from './model.js';
 import { describeModel, modelsLines, type ModelsView } from './models.js';
 import { RpcError } from './protocol.js';
@@ -92,7 +92,7 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
     },
     close: () => raw.close(),
   };
-  const meta = (await client.call<{ meta: { name: string } }>('snapshot')).meta;
+  const meta = (await readSummary(client)).meta;
   const gm = meta.name;
   const tools = opts.role === 'gm' ? GM_TOOLS : AGENT_TOOLS;
 
@@ -135,7 +135,7 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
       case 'task_report': { const r = await client.call<{ message: string }>('task.report', a); out = r.message; break; }
       case 'task_checkpoint': { const r = await client.call<{ message: string }>('task.checkpoint', a); out = r.message; break; }
       case 'task_cancel': { const t = await client.call<Task>('task.cancel', a); out = `#${t.id} cancelled.`; break; }
-      case 'task_list': out = fmtList(await client.call<Task[]>('task.list'), gm, a.all === true); break;
+      case 'task_list': out = fmtList(await client.call<Task[]>('task.list', { light: true }), gm, a.all === true); break;
       case 'task_get': out = fmtTask(await client.call<Task>('task.get', { id }), gm); break;
       case 'team_list': {
         const team = await client.call<Array<Agent & { effectiveModel?: string }>>('team.list');
@@ -158,7 +158,7 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
       }
       case 'workspace_update': { const ws = await client.call<{ dir: string; branch?: string; notes: string; brief: string }>('workspace.update', a); out = `Workspace: ${ws.dir}${ws.branch ? ` · branch ${ws.branch}` : ''}${ws.notes ? ` · conventions: ${ws.notes}` : ''}${ws.brief ? `\nProject brief recorded (${ws.brief.length} chars); the task manager will reason from it.` : ''}. Agents adapt at their next task.`; break; }
       case 'inbox_read': { const items = await client.call<InboxItem[]>('inbox.read', { ack: true }); out = items.length ? items.map((i) => `[${i.kind === 'info' || i.kind === 'context' ? 'for awareness' : 'needs you'} · ${i.kind}${i.taskId !== undefined ? ` #${i.taskId}` : ''}] ${i.text}`).join('\n\n') : 'Nothing new.'; break; }
-      case 'board_summary': { const snap = await client.call<{ tasks: Task[]; team: Agent[]; needYou: number; inboxUnread: number }>('snapshot'); const running = snap.tasks.filter((t) => t.status === 'in_progress').length; const queued = snap.tasks.filter((t) => t.status === 'open' && t.dispatchRequested).length; out = `${snap.needYou} need the owner · ${running} running · ${queued} queued · ${snap.inboxUnread} unread for you · team: ${snap.team.map((x) => `${x.name} ${x.state}`).join(', ')}`; break; }
+      case 'board_summary': { const s = await readSummary(client); out = `${s.needYou} need the owner · ${s.running} running · ${s.queued} queued · ${s.inboxUnread} unread for you · team: ${s.team.map((x) => `${x.name} ${x.state}`).join(', ')}`; break; }
       case 'memory_update': await client.call('memory.update', a); out = 'Memory updated.'; break;
       default:
         return text(`unknown tool ${name}`, true);

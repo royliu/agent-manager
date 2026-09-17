@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.9 · 2026-09-17
+
+- The task manager no longer runs out of memory on a large board. A board of a few hundred tasks is a 15 MB snapshot; the board asked for a new one on every change while the last was still arriving, and the unsent replies piled up until the process died (24 times on 17 Sep, each time cutting running agents off from the board). Now a connection that falls more than 64 MB behind is dropped and reconnects, a subscriber that is behind misses pushes until it catches up, and the board asks for one snapshot at a time, at most one a second.
+- Reading a large reply is linear again: the client no longer searches its whole buffer on every chunk (a 15.7 MB snapshot took 11 s to read, now 0.2 s).
+- A new `summary` request carries the counts without the task bodies. The status line, the hooks, the MCP bridge's start, `board_summary` and `am status` use it instead of the whole snapshot, and fall back to the snapshot on an older task manager. `task_list` asks for tasks without their notes.
+
 ## 0.8.2 · 2026-09-09
 
 - The 90% context line holds. Until now the checkpoint notice reached an agent only through the result of a task tool, so an agent busy reading and editing files could run past 100% without seeing it. Two fixes: every Claude Code agent now carries a hook that refuses its next tool call with the notice once it is over the line, so it sees it on its very next action; and if an agent still has not checkpointed after `agent.compact-grace` minutes (default 3) or at 98% as a last resort, the task manager ends the run, writes the checkpoint itself from what it saw (last progress, last words, recent actions) and continues the task in a fresh session, telling the GM for awareness.

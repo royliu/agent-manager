@@ -5,9 +5,8 @@ import path from 'node:path';
 import { profileByName } from '../core/config.js';
 import { cyan, dim, yellow } from '../ui/format.js';
 import { loadSwarmConfig } from './registry.js';
-import { serviceRunning, TmClient } from './client.js';
+import { readSummary, serviceRunning, TmClient } from './client.js';
 import type { InboxItem } from './model.js';
-import type { BoardSnapshot } from './service.js';
 
 /**
  * The status line the GM session would have shown without us: the profile's own
@@ -128,14 +127,14 @@ export async function hookCommand(kind: 'inbox' | 'stop' | 'status' | 'compact',
     // status line: the profile's own HUD first (claude-hud when installed), then the swarm line.
     const cfg = loadSwarmConfig();
     if (cfg.hud) {
-      const metaForHome = await c.call<BoardSnapshot>('snapshot');
+      const metaForHome = await readSummary(c);
       const prof = profileByName(metaForHome.meta.profile);
       const hud = prof ? runBaseStatusLine(raw, prof.home) : '';
       if (hud) process.stdout.write(hud + '\n');
     }
     const sid = typeof input.session_id === 'string' ? input.session_id : undefined;
     if (sid) await c.call('gm.session', { sessionId: sid }).catch(() => undefined);
-    const snap = await c.call<BoardSnapshot>('snapshot');
+    const snap = await readSummary(c);
     const cw = input.context_window as { used_percentage?: number } | undefined;
     const ctx = typeof cw?.used_percentage === 'number' ? Math.round(cw.used_percentage) : snap.gmContextPct;
     const parts = [cyan(snap.meta.name), dim(`· ${snap.meta.profile}${snap.quota?.plan ? ` ${snap.quota.plan}` : ''}`)];

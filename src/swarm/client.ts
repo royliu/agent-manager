@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { socketDir, swarmPaths } from './paths.js';
 import { RpcError, type Push, type Request, type Wire } from './protocol.js';
+import type { BoardSnapshot, BoardSummary } from './service.js';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -20,7 +21,9 @@ export class TmClient {
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private listeners = new Set<(p: Push) => void>();
-  private buffer = '';
+  /** Pieces of the line still being received. A snapshot is one line of megabytes; joining once at its
+   *  newline keeps reading it linear, where searching a growing buffer on every chunk was quadratic. */
+  private partial: string[] = [];
 
   constructor(readonly swarm: string) {}
 
@@ -51,27 +54,34 @@ export class TmClient {
   }
 
   private onData(chunk: string): void {
-    this.buffer += chunk;
+    let from = 0;
     let nl: number;
-    while ((nl = this.buffer.indexOf('\n')) >= 0) {
-      const line = this.buffer.slice(0, nl);
-      this.buffer = this.buffer.slice(nl + 1);
-      if (!line.trim()) continue;
-      let msg: Wire;
-      try {
-        msg = JSON.parse(line) as Wire;
-      } catch {
-        continue;
-      }
-      if ('event' in msg) {
-        for (const l of this.listeners) l(msg);
-      } else {
-        const p = this.pending.get(msg.id);
-        if (!p) continue;
-        this.pending.delete(msg.id);
-        if (msg.error) p.reject(new RpcError(msg.error.message, msg.error.code));
-        else p.resolve(msg.result);
-      }
+    while ((nl = chunk.indexOf('\n', from)) >= 0) {
+      this.partial.push(chunk.slice(from, nl));
+      const line = this.partial.join('');
+      this.partial = [];
+      from = nl + 1;
+      this.onLine(line);
+    }
+    if (from < chunk.length) this.partial.push(chunk.slice(from));
+  }
+
+  private onLine(line: string): void {
+    if (!line.trim()) return;
+    let msg: Wire;
+    try {
+      msg = JSON.parse(line) as Wire;
+    } catch {
+      return;
+    }
+    if ('event' in msg) {
+      for (const l of this.listeners) l(msg);
+    } else {
+      const p = this.pending.get(msg.id);
+      if (!p) return;
+      this.pending.delete(msg.id);
+      if (msg.error) p.reject(new RpcError(msg.error.message, msg.error.code));
+      else p.resolve(msg.result);
     }
   }
 
@@ -187,6 +197,32 @@ export async function openClient(swarm: string): Promise<TmClient> {
   const c = new TmClient(swarm);
   await c.connect();
   return c;
+}
+
+/**
+ * The board's counts. Asks for the small summary; a task manager older than 0.8.9 does not know it, so
+ * that one is asked for the whole snapshot and the counts are worked out here.
+ */
+export async function readSummary(c: Pick<TmClient, 'call'>): Promise<BoardSummary> {
+  try {
+    return await c.call<BoardSummary>('summary');
+  } catch (e) {
+    if (!(e instanceof RpcError) || e.code !== 'no_method') throw e;
+  }
+  const s = await c.call<BoardSnapshot>('snapshot');
+  const ACTIVE = new Set(['open', 'plan', 'in_progress', 'blocked', 'review']);
+  return {
+    meta: s.meta,
+    team: s.team,
+    inboxUnread: s.inboxUnread,
+    needYou: s.needYou,
+    running: s.tasks.filter((t) => t.status === 'in_progress').length,
+    queued: s.tasks.filter((t) => t.status === 'open' && t.dispatchRequested).length,
+    active: s.tasks.filter((t) => ACTIVE.has(t.status)).length,
+    quota: s.quota,
+    gmContextPct: s.gmContextPct,
+    takenAt: s.takenAt,
+  };
 }
 
 export async function withClient<T>(swarm: string, fn: (c: TmClient) => Promise<T>): Promise<T> {

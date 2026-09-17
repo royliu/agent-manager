@@ -686,9 +686,23 @@ const Board: React.FC<{ swarm: string; group: Group; sizeOverride?: { W: number;
   };
 
   const reconnecting = useRef(false);
+  /**
+   * One snapshot at a time, at most one a second. A board of a few hundred tasks is megabytes; asking
+   * again on every push before the last answer had arrived queued replies in the task manager until it
+   * ran out of memory (17 Sep 2026: 15.7 MB a snapshot, 24 crashes in a day).
+   */
+  const inFlight = useRef(false);
+  const wanted = useRef(false);
+  const later = useRef<NodeJS.Timeout>();
   const refresh = async () => {
     const c = client.current;
     if (!c) return;
+    if (inFlight.current) {
+      wanted.current = true;
+      return;
+    }
+    inFlight.current = true;
+    const started = Date.now();
     try {
       const s = await c.call<BoardSnapshot>('snapshot');
       setSnap(s);
@@ -709,6 +723,15 @@ const Board: React.FC<{ swarm: string; group: Group; sizeOverride?: { W: number;
         toast(pc.red('task manager unreachable; retrying'));
       } finally {
         reconnecting.current = false;
+      }
+    } finally {
+      inFlight.current = false;
+      if (wanted.current && !later.current) {
+        wanted.current = false;
+        later.current = setTimeout(() => {
+          later.current = undefined;
+          void refresh();
+        }, Math.max(0, 1000 - (Date.now() - started)));
       }
     }
   };
