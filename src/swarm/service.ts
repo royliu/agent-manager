@@ -1,3 +1,4 @@
+import { openSync, readSync, closeSync, fstatSync } from 'node:fs';
 import { execFileSync, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -151,6 +152,53 @@ function pathTouches(a: string, b: string): boolean {
 export function pathsClash(a: string[], b: string[]): string | null {
   for (const x of a) for (const y of b) if (pathTouches(x, y)) return x === y ? x : `${x} and ${y}`;
   return null;
+}
+
+/**
+ * ═══ A RUN THAT DIED ON THE ACCOUNT'S USAGE LIMIT ═══ (friday, 17 Sep 2026)
+ *
+ * The tool answers 429 with "You've hit your session limit · resets 4pm (America/Los_Angeles)" and exits at once.
+ * Nothing about that is the task's fault, and starting it again fails in half a second — on 17 Sep that loop wrote
+ * 6,226 run logs and 1,724 notices in a day. So the last line of a failed run's log is read: when it names the
+ * limit, every task waits for the reset instead of being started again.
+ */
+export function limitFromLog(file: string): { until: number; said: string } | null {
+  let tail = '';
+  try {
+    const fd = openSync(file, 'r');
+    try {
+      const size = fstatSync(fd).size;
+      const want = Math.min(size, 8192);
+      const buf = Buffer.alloc(want);
+      readSync(fd, buf, 0, want, size - want);
+      tail = buf.toString('utf8');
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+  const said = /"result":"([^"]*(?:session limit|usage limit|rate limit)[^"]*)"/i.exec(tail)?.[1];
+  if (!said) return null;
+  const now = new Date();
+  const at = /resets?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(said);
+  let until = now.getTime() + 15 * 60_000;
+  if (at) {
+    let hour = Number(at[1]);
+    const min = Number(at[2] ?? 0);
+    const ampm = at[3]?.toLowerCase();
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    const when = new Date(now);
+    when.setHours(hour, min, 0, 0);
+    /** A reset that reads as just past is this window's, seconds old: wait a moment, not a whole day. */
+    if (when.getTime() <= now.getTime()) {
+      if (now.getTime() - when.getTime() < 30 * 60_000) return { until: now.getTime() + 2 * 60_000, said };
+      when.setDate(when.getDate() + 1);
+    }
+    until = when.getTime();
+  }
+  return { until, said };
 }
 
 export class TaskManagerService {
@@ -1336,7 +1384,13 @@ export class TaskManagerService {
     }
   }
 
+  /** Until when the account's own limit stops every run, from the words of the run that hit it. */
+  private limitUntil = 0;
+  /** The reset this was already said about, so the owner hears it once per window. */
+  private limitSaidFor = 0;
+
   private quotaHold(): boolean {
+    if (this.limitUntil > this.now()) return true;
     const q = this.quotaCache?.value;
     return !!q && q.usedPercent >= this.cfg.quotaHoldAt;
   }
@@ -1409,6 +1463,10 @@ export class TaskManagerService {
       if (!idle.length) break;
     }
     // Quota freed up: release held tasks.
+    if (this.limitUntil && this.limitUntil <= this.now()) {
+      this.limitUntil = 0;
+      this.event('task manager', 'the account\'s limit window has passed; work starts again');
+    }
     if (!this.quotaHold()) {
       for (const t of this.store.all()) {
         if (t.status === 'blocked' && t.blockedOn?.kind === 'quota') {
@@ -1940,15 +1998,29 @@ export class TaskManagerService {
       fresh.dispatchRequested = true;
       a.nudges = 0;
     } else if (code !== 0 && code !== null) {
+      const limit = run.log ? limitFromLog(run.log) : null;
       run.exit = 'failed';
-      run.exitNote = `exit code ${code}`;
+      run.exitNote = limit ? limit.said : `exit code ${code}`;
       a.state = 'idle';
       a.taskId = undefined;
       a.rotateSession = true;
-      fresh.status = 'open';
-      fresh.dispatchRequested = false;
-      this.note(fresh, 'task manager', 'finding', `${a.name}'s run ended with an error (exit ${code}); see ${run.log}.`);
-      this.inbox('failed', `${a.name}'s run on #${taskId} ${fresh.title} ended with an error (exit code ${code}). The task is back to open; check ${run.log}, then start it again or cancel it.`, taskId);
+      if (limit) {
+        // The account, not the task: everything waits for the reset, and the owner hears it once.
+        this.limitUntil = Math.max(this.limitUntil, limit.until);
+        fresh.status = 'blocked';
+        fresh.blockedOn = { kind: 'quota', profile: this.profile.name, resetsAt: limit.until };
+        fresh.resumeTo = 'open';
+        fresh.dispatchRequested = true;
+        if (this.limitSaidFor !== limit.until) {
+          this.limitSaidFor = limit.until;
+          this.inbox('quota', `The ${this.profile.name} profile has hit its limit: "${limit.said}". Every task is waiting for the reset at ${new Date(limit.until).toLocaleTimeString()} and nothing is being retried until then. Tell the owner, and move the agents to another profile if the work cannot wait (am agent move <agent> --profile <name>).`);
+        }
+      } else {
+        fresh.status = 'open';
+        fresh.dispatchRequested = false;
+        this.note(fresh, 'task manager', 'finding', `${a.name}'s run ended with an error (exit ${code}); see ${run.log}.`);
+        this.inbox('failed', `${a.name}'s run on #${taskId} ${fresh.title} ended with an error (exit code ${code}). The task is back to open; check ${run.log}, then start it again or cancel it.`, taskId);
+      }
     } else if (a.nudges < 2) {
       // Ended its turn without reporting or asking: nudge once or twice, then give up.
       run.exit = 'paused';

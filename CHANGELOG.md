@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1 · 2026-09-17
+
+- A run killed by the account's own usage limit no longer starts again in half a second. The tool answers 429 with "You've hit your session limit · resets 4pm" and exits at once; the task went back to open, an idle agent picked it up, and it died again — on genie, 17 Sep, that loop wrote 6,226 run logs and 1,724 inbox notices in a day, twice. The last line of a failed run's log is now read: when it names a session, usage or rate limit, every task waits for the reset (blocked on quota, with the reset time on it), nothing is started until then, and the owner is told once per window instead of once per retry. Work resumes by itself when the window passes. A failure that is not a limit behaves exactly as before.
+
 ## 0.11.0 · 2026-09-17
 
 - A task can say which files it will change, and two tasks that would change the same file never run at the same time. `task_create` and `task_update` take `paths` (repository paths; a trailing slash or `*` covers a folder), and when an agent frees up the task manager skips a task whose files a running task already holds, fills the agent with the next one instead, and writes on the skipped task which task it is waiting for. On genie, 17 Sep, this was the largest hidden cost of the day: four lanes landing into one branch made every other lane re-apply its work, and one task re-applied against twenty-one landings — more time than every suite run put together. A task that declares no paths behaves exactly as before, so the rule only ever helps a lane that said what it would touch.
