@@ -148,6 +148,13 @@ export async function startCommand(profileName: string, nameArg: string | undefi
     const was = meta.profile;
     meta.profile = profile.name;
     meta.provider = profile.provider;
+    // The GM's and task manager's models were chosen for the profile they ran on, and a model named for
+    // one backend is unknown to another (moonshotai/kimi-k3 on a Claude login). On the new profile they
+    // run its own model; --gm-model and --tm-model on this same command still set one, just below.
+    const models = { ...(meta.models ?? {}) };
+    const dropped = (['gm', 'tm'] as const).filter((role) => models[role]);
+    for (const role of dropped) delete models[role];
+    meta.models = Object.keys(models).length ? models : undefined;
     new Store(meta.name).saveMeta(meta);
     saveSwarm(meta);
     // The task manager reads the profile once, when it starts, so it has to come back to see this.
@@ -164,6 +171,9 @@ export async function startCommand(profileName: string, nameArg: string | undefi
       for (let i = 0; i < 50 && serviceRunning(meta.name); i += 1) await new Promise((r) => setTimeout(r, 100));
     }
     console.log(`  ${green('✓')} profile moved from ${was} to ${profile.name}; the task manager comes back on it`);
+    if (dropped.length) {
+      console.log(`    ${dim(`the ${dropped.map((r) => (r === 'gm' ? 'GM' : 'task manager')).join(' and ')} now run${dropped.length === 1 ? 's' : ''} ${profile.name}'s own model, not the one set on ${was}`)}`);
+    }
   }
   await ensureService(meta.name);
   // Model flags are remembered for this GM; "default" clears one so the profile's model applies again.

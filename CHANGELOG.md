@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1 · 2026-09-17
+
+- Moving a GM to another profile now clears the models set for it. A model set for one GM beat the profile's own, so a GM moved from an OpenRouter profile to a subscription one kept asking for an OpenRouter id, and Claude Code answered "There's an issue with the selected model" on every turn (17 Sep). `am gm start <profile> <gm>` on a GM that ran elsewhere now drops the GM's and the task manager's models and says so; `--gm-model` or `--tm-model` on the same command still set one.
+
 ## 0.9.0 · 2026-09-17
 
 - Profiles on OpenRouter. A Claude Code or Codex profile can reach its model through OpenRouter with an API key instead of a subscription login: `am profile add` now asks which tool, then how the profile reaches its model (its own login or OpenRouter), then the model; `--openrouter` and `-m <id>` do the same without prompts, with the key read from `OPENROUTER_API_KEY` and never from the command line. The key and the model are checked with OpenRouter before anything is written, and a typo is answered with the id you probably meant.

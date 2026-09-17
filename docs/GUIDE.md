@@ -396,7 +396,10 @@ neither is set. A setting for one GM beats the global one. A profile on OpenRout
 it was made with even when a global setting names one, because global settings use the tool's own
 ids (`claude-opus-5`), which OpenRouter calls something else (`anthropic/claude-opus-5`); a setting
 for one GM still applies, so give it an OpenRouter id. `default` puts a group back on
-the profile's model: `am config model.tm default`, or `--tm-model default`.
+the profile's model: `am config model.tm default`, or `--tm-model default`. Moving a GM to another
+profile (`am gm start work friday` on a GM that ran on `kimi`) clears the GM's and the task
+manager's models set for it, so both run the new profile's own model; pass `--gm-model` or
+`--tm-model` on that same command to pick one.
 
 Name models by their official ids: `claude-fable-5-1`, `claude-opus-5`, `claude-sonnet-5`,
 `claude-haiku-4-5-20251001`; for Codex profiles the id Codex accepts, such as `gpt-5.6-sol`.
