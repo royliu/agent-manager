@@ -164,7 +164,7 @@ export async function runMcpBridge(opts: { swarm: string; role: 'gm' | 'agent'; 
         return text(`unknown tool ${name}`, true);
     }
     if (opts.role === 'agent' && opts.agent) {
-      const notice = await client.call<string | null>('agent.notice', { agent: opts.agent });
+      const notice = await client.call<string | null>('agent.notice', { agent: opts.agent, answers: true });
       if (notice) out += `\n\n${notice}`;
     }
     return text(out);

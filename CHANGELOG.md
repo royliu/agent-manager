@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.10 · 2026-09-17
+
+- A task whose agent keeps working while its question is answered stays In progress. An agent that asks, names its default and carries on still has a live run; answering used to set the task to Open and try to start a second run, which the task manager skipped, so the board showed a working agent's task under Open until it reported (17 Sep, #448). Now the task stays In progress, and the answer reaches the running agent once, in the result of its next task tool call. With no live run, the agent is continued with the answer as before.
+
 ## 0.8.9 · 2026-09-17
 
 - The task manager no longer runs out of memory on a large board. A board of a few hundred tasks is a 15 MB snapshot; the board asked for a new one on every change while the last was still arriving, and the unsent replies piled up until the process died (24 times on 17 Sep, each time cutting running agents off from the board). Now a connection that falls more than 64 MB behind is dropped and reconnects, a subscriber that is behind misses pushes until it catches up, and the board asks for one snapshot at a time, at most one a second.

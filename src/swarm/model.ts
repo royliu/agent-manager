@@ -42,6 +42,8 @@ export const QuestionSchema = z.object({
   answeredBy: z.string().optional(),
   askedAt: z.number(),
   answeredAt: z.number().optional(),
+  /** Answered while the asker's run was still going: shown once in that run's next task tool result. */
+  deliverLive: z.boolean().optional(),
 });
 export type Question = z.infer<typeof QuestionSchema>;
 

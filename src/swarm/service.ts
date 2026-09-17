@@ -463,7 +463,7 @@ export class TaskManagerService {
       case 'memory.update':
         return this.updateMemory(str(p, 'agent'), str(p, 'text'));
       case 'agent.notice':
-        return this.notice(str(p, 'agent'));
+        return this.notice(str(p, 'agent'), p.answers === true);
       case 'team.list':
         return this.store.team().map((a) => ({ ...a, effectiveModel: this.effectiveModel(a) }));
       case 'models.get':
@@ -862,12 +862,21 @@ export class TaskManagerService {
       t.status = t.resumeTo && t.resumeTo !== 'blocked' ? t.resumeTo : 'in_progress';
       t.blockedOn = undefined;
       t.resumeTo = undefined;
-      if (t.status === 'in_progress') {
+      const a = t.agent ? this.agent(t.agent) : undefined;
+      if (t.status === 'in_progress' && a && this.runAlive(a.name)) {
+        // The agent named its default and kept working, so its run is still going. The task stays in
+        // progress and the answer reaches that run in its next task tool result. Setting the task to Open
+        // and starting a run here did nothing (the agent already has a live run), which left a working
+        // agent's task under Open on the board (17 Sep, #448).
+        q.deliverLive = true;
+        a.state = 'working';
+        a.taskId = t.id;
+        this.saveAgent(a);
+      } else if (t.status === 'in_progress') {
         // Continue the agent with the answer.
         t.status = 'open';
         t.dispatchRequested = true;
         this.store.save(t);
-        const a = t.agent ? this.agent(t.agent) : undefined;
         if (a) {
           a.state = 'idle';
           this.saveAgent(a);
@@ -1089,14 +1098,23 @@ export class TaskManagerService {
     return true;
   }
 
-  /** Appended to every agent tool result while its context is over the line. */
-  private notice(agent: string): string | null {
+  /**
+   * Appended to every agent tool result while its context is over the line. With `answers` (the agent's
+   * own task tools), it also hands over, once, an answer that arrived while the agent's run kept working.
+   */
+  private notice(agent: string, answers = false): string | null {
     const a = this.agent(agent);
     if (!a) return null;
     if (a.compactRequestedAt && !a.rotateSession) {
       return `Notice from the task manager: your context is at ${a.contextPct}%, over the ${this.cfg.compactAt}% line. Write a checkpoint now (task_checkpoint: what is done, what is left, the next step, decisions and why), refresh your project memory (memory_update), then end your reply. You will be continued with a fresh context.`;
     }
     const t = a.taskId !== undefined ? this.store.get(a.taskId) : undefined;
+    const waiting = answers && t ? t.questions.filter((q) => q.deliverLive && q.answer) : [];
+    if (t && waiting.length) {
+      for (const q of waiting) q.deliverLive = undefined;
+      this.store.save(t);
+      return waiting.map((q) => `Notice from the task manager: your question on #${t.id} was answered while you worked. Question: "${q.question}" Answer (${q.answeredBy ?? 'the task manager'}): ${q.answer}`).join('\n\n');
+    }
     if (t && !t.eta && t.status === 'in_progress') {
       return `Notice from the task manager: #${t.id} has no eta. Set one now with task_eta ("2h", "1d", or a date and time) and refine it as you learn more.`;
     }
@@ -1670,6 +1688,12 @@ export class TaskManagerService {
   }
 
   /** Start (or continue) an agent on a task. `message` replaces the brief when resuming mid-task. */
+  /** True while this task manager's run for the agent has not exited. */
+  private runAlive(agentName: string): boolean {
+    const child = this.children.get(agentName);
+    return !!child && child.exitCode === null && child.signalCode === null;
+  }
+
   private startRun(t: Task, a: Agent, message?: string): void {
     const running = this.children.get(a.name);
     if (running) {
