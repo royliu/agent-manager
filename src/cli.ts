@@ -97,7 +97,7 @@ program
 // ------------------------------------------------------------------ profiles
 const profile = program
   .command('profile')
-  .description('your accounts: am profile ls | add [name] | rm <name> | use <name> | run <name> [-- args]')
+  .description('your accounts: am profile ls | add [name] (Claude Code or Codex, own login or OpenRouter) | rm <name> | use <name> | run <name> [-- args]')
   .action(() => {
     listCommand({});
   });
@@ -113,9 +113,12 @@ profile
 
 profile
   .command('add')
-  .description('create a new isolated profile and walk you through signing in')
+  .alias('init')
+  .description('create a new isolated profile: pick the tool, then its own login or OpenRouter, then the model')
   .argument('[name]', 'profile name, e.g. work')
   .option('-p, --provider <provider>', 'claude-code | codex | claude-desktop | gemini | cursor')
+  .option('-m, --model <id>', 'the model it runs: claude-opus-5, gpt-5.6-sol, or with --openrouter an OpenRouter id such as anthropic/claude-sonnet-5')
+  .option('--openrouter', 'reach models through OpenRouter with an API key instead of signing in (key from OPENROUTER_API_KEY, or asked for)')
   .option('-l, --label <label>', 'human note, e.g. "Work — Max 20x"')
   .option('--home <dir>', 'use a specific config directory instead of the managed one')
   .option('-y, --yes', 'accept defaults, never prompt')

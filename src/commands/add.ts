@@ -4,17 +4,24 @@ import {
   type Profile, type ProviderId,
 } from '../core/config.js';
 import { accountKey } from '../core/duplicates.js';
+import { writeHarness, type HarnessSetup } from '../core/harness.js';
 import { ensureAmHome, ensureDir, profileHome, tildify } from '../core/paths.js';
 import { runForeground } from '../core/exec.js';
 import { desktopProfileHome, getProvider, PROVIDER_ORDER, readIdentitySafe } from '../providers/index.js';
+import { keyHint, openRouterIdentity } from '../providers/openrouter.js';
 import { bold, cyan, dim, green, red, yellow } from '../ui/format.js';
 import { ask, closePrompts, confirm, isInteractive, select, type Choice } from '../ui/prompt.js';
+import { chooseHarness, describeSetup } from './modelsetup.js';
 
 interface AddOptions {
   provider?: string;
   label?: string;
   home?: string;
   yes?: boolean;
+  /** The model the profile runs: a native id, or an OpenRouter id with `openrouter`. */
+  model?: string;
+  /** Reach models through OpenRouter with an API key instead of the tool's own login. */
+  openrouter?: boolean;
 }
 
 function homeFor(provider: ProviderId, name: string): string {
@@ -118,6 +125,23 @@ export async function addCommand(nameArg: string | undefined, opts: AddOptions):
     return;
   }
 
+  // ---- backend and model --------------------------------------------------
+  // Asked before anything is written, so a rejected key or an unknown model leaves no half-made profile.
+  const tool = provider === 'claude-code' || provider === 'codex' ? provider : undefined;
+  let setup: HarnessSetup | undefined;
+  if (tool) {
+    setup = await chooseHarness(tool, { model: opts.model, openrouter: opts.openrouter, yes: opts.yes });
+    if (!setup) {
+      closePrompts();
+      process.exitCode = 1;
+      return;
+    }
+  } else if (opts.model || opts.openrouter) {
+    console.error(`${red('✗')} --model and --openrouter are for Claude Code and Codex profiles; ${impl.displayName} is set up in the app.`);
+    process.exitCode = 1;
+    return;
+  }
+
   // ---- home ---------------------------------------------------------------
   const home = opts.home ? opts.home : homeFor(provider, name);
   if (fs.existsSync(home) && fs.readdirSync(home).length > 0) {
@@ -131,12 +155,15 @@ export async function addCommand(nameArg: string | undefined, opts: AddOptions):
     }
   }
   ensureDir(home);
+  if (tool && setup && (setup.backend === 'openrouter' || setup.model)) writeHarness(tool, home, setup);
+  const onOpenRouter = setup?.backend === 'openrouter';
 
   const profile: Profile = {
     name,
     provider,
     home,
     label: opts.label,
+    ...(onOpenRouter ? { account: openRouterIdentity(keyHint(setup!.key)).account, plan: 'OpenRouter' } : {}),
     managed: true,
     createdAt: new Date().toISOString(),
   };
@@ -153,6 +180,23 @@ export async function addCommand(nameArg: string | undefined, opts: AddOptions):
     console.log(
       `    ${dim('isolation ')}  HOME=${tildify(home)} ${dim('(this tool has no config-dir variable)')}`,
     );
+  }
+  if (setup) console.log(`    ${dim('model     ')}  ${describeSetup(setup)}`);
+
+  // ---- ready: OpenRouter needs no sign-in ---------------------------------
+  if (onOpenRouter) {
+    const lines: [string, string][] = [
+      [`am run ${name}`, `open ${impl.displayName} on it`],
+      [`am gm start ${name} [gm-name]`, 'in a project folder: a General Manager and its team on it'],
+    ];
+    const pad = Math.max(...lines.map(([c]) => c.length)) + 2;
+    console.log('');
+    console.log(`  ${bold('Ready, no sign-in needed:')}`);
+    for (const [command, what] of lines) console.log(`    ${cyan(command)}${' '.repeat(pad - command.length)}${dim(what)}`);
+    console.log('');
+    setActive(provider, name);
+    closePrompts();
+    return;
   }
 
   // ---- sign in ------------------------------------------------------------

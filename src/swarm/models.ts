@@ -1,6 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Profile } from '../core/config.js';
+import { readHarness } from '../core/harness.js';
 import type { Agent, SwarmConfig, SwarmMeta } from './model.js';
 
 /**
@@ -9,7 +8,8 @@ import type { Agent, SwarmConfig, SwarmMeta } from './model.js';
  *
  * Resolution order, per group:
  *   1. set for this GM         (am gm start … --gm-model / --tm-model / --agent-model, or the GM's models_set)
- *   2. set for every GM        (am config model.gm | model.tm | model.agents | model.codex-agents)
+ *   2. set for every GM        (am config model.gm | model.tm | model.agents | model.codex-agents),
+ *                              except on an OpenRouter profile, which keeps the model it was made for
  *   3. the profile's own model (Claude Code settings.json "model", Codex config.toml "model")
  *   4. the tool's default
  * Only 1 and 2 are passed on the command line; for 3 and 4 the tool applies its own default.
@@ -38,28 +38,16 @@ export interface ModelsView {
   hasClaudeAgents: boolean;
 }
 
-/** The model a profile's tool would pick on its own. */
-export function profileDefaultModel(profile: Profile | undefined): string | undefined {
-  if (!profile) return undefined;
-  try {
-    if (profile.provider === 'codex') {
-      const toml = fs.readFileSync(path.join(profile.home, 'config.toml'), 'utf8');
-      const m = /^\s*model\s*=\s*"([^"]+)"/m.exec(toml);
-      return m?.[1];
-    }
-    return (JSON.parse(fs.readFileSync(path.join(profile.home, 'settings.json'), 'utf8')) as { model?: string }).model || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function resolveModel(role: ModelRole, meta: SwarmMeta, cfg: SwarmConfig, profile: Profile | undefined): ModelChoice {
   const own = meta.models?.[role];
   if (own) return { model: own, source: 'this GM' };
+  const harness = profile ? readHarness(profile.provider, profile.home) : undefined;
   const global = (cfg as Record<string, unknown>)[`${role}Model`];
-  if (typeof global === 'string' && global) return { model: global, source: 'am config' };
-  const def = profileDefaultModel(profile);
-  return def ? { model: def, source: 'profile' } : { source: 'tool default' };
+  // A model set for every GM is named the way the tool's own backend names it (claude-opus-5,
+  // gpt-5.6-sol), which OpenRouter does not know; an OpenRouter profile keeps the model it was made for.
+  const keepsOwn = harness?.backend === 'openrouter' && !!harness.model;
+  if (typeof global === 'string' && global && !keepsOwn) return { model: global, source: 'am config' };
+  return harness?.model ? { model: harness.model, source: 'profile' } : { source: 'tool default' };
 }
 
 /** What goes on the command line: an explicit choice only; otherwise the tool applies the profile's own default. */

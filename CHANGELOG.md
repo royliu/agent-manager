@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 · 2026-09-17
+
+- Profiles on OpenRouter. A Claude Code or Codex profile can reach its model through OpenRouter with an API key instead of a subscription login: `am profile add` now asks which tool, then how the profile reaches its model (its own login or OpenRouter), then the model; `--openrouter` and `-m <id>` do the same without prompts, with the key read from `OPENROUTER_API_KEY` and never from the command line. The key and the model are checked with OpenRouter before anything is written, and a typo is answered with the id you probably meant.
+- The setup lives in the profile's own config, so `am run`, the GM, the task manager and the agents all follow it: Claude Code's `settings.json` gets OpenRouter's base URL, the key and the model, with every model alias the tool uses internally mapped to it; Codex's `config.toml` gets an `openrouter` model provider whose key it reads from `openrouter.key` beside it (mode 600).
+- `am status` and `am doctor` show such a profile as signed in, on `OpenRouter`, with its model and the key's last four characters, and no quota window. A model set for every GM with `am config model.*` no longer reaches an OpenRouter profile, since those settings use the tool's own model ids; a model set for one GM still does.
+- A native profile can pin its model at creation too: `am profile add work -p claude-code -m claude-opus-5`.
+
 ## 0.8.10 · 2026-09-17
 
 - A task whose agent keeps working while its question is answered stays In progress. An agent that asks, names its default and carries on still has a live run; answering used to set the task to Open and try to start a second run, which the task manager skipped, so the board showed a working agent's task under Open until it reported (17 Sep, #448). Now the task stays In progress, and the answer reaches the running agent once, in the result of its next task tool call. With no live run, the agent is continued with the answer as before.

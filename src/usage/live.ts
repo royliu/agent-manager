@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { CACHE_DIR, ensureDir } from '../core/paths.js';
 import type { Profile } from '../core/config.js';
+import { readHarness } from '../core/harness.js';
 import type { Window } from '../providers/types.js';
 
 const pexec = promisify(execFile);
@@ -153,6 +154,8 @@ export interface LiveResult {
  */
 export async function fetchLiveUsage(profile: Profile): Promise<LiveResult | undefined> {
   if (profile.provider !== 'claude-code') return undefined;
+  // Billed per token on OpenRouter: there is no subscription window to ask about.
+  if (readHarness(profile.provider, profile.home).backend === 'openrouter') return undefined;
 
   const now = Date.now();
   const cached = readCache(profile);

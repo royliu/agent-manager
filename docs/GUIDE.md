@@ -78,8 +78,36 @@ removing and re-adding, but the names only matter to you.
 am profile add personal            # pick the tool, then sign in when it opens
 ```
 
-`am profile add` creates the directory, then launches the tool inside it so you can sign in with
-`/login` (Claude Code) or `codex login`. When you come back it confirms the account and plan.
+`am profile add` asks which tool, how it reaches a model and which model, creates the directory,
+then launches the tool inside it so you can sign in with `/login` (Claude Code) or `codex login`.
+When you come back it confirms the account and plan. Pick "the tool's default" to let the tool
+choose its model, or pin one: `am profile add work -p claude-code -m claude-opus-5`.
+
+**A profile on OpenRouter.** Claude Code and Codex can also run any model on OpenRouter, billed
+per token to an OpenRouter key instead of a subscription. Choose OpenRouter when `am profile add`
+asks how the profile reaches its model, paste the key (it is not echoed), and pick a model:
+
+```sh
+am profile add kimi                 # Claude Code → OpenRouter → key → moonshotai/kimi-k3
+am run kimi                         # no sign-in needed
+am gm start kimi friday             # the whole team on it
+```
+
+Scripted, the key is read from `OPENROUTER_API_KEY`, never from the command line:
+
+```sh
+OPENROUTER_API_KEY=sk-or-… am profile add glm -p codex --openrouter -m z-ai/glm-5.3 -y
+```
+
+`am` asks OpenRouter whether it knows the key and the model before creating anything, and suggests
+the id you probably meant on a typo. The setup lives in the profile's own config, so `am run`, the
+GM, the task manager and the agents all follow it: Claude Code's `settings.json` holds OpenRouter's
+base URL, the key and the model (every model alias Claude Code uses internally maps to it, and
+1M-context Claude models get the `[1m]` marker); Codex's `config.toml` holds an `openrouter` model
+provider that reads the key from `openrouter.key` next to it. To change the key or the model later,
+edit those files. Claude Code and Codex are built around their makers' models; other models work
+through OpenRouter but may handle the tools less well. `am status` lists the profile as `OpenRouter`, with the model and the key's last
+four characters; there is no quota window, so the quota guard rails do not apply.
 
 **Check everything:**
 
@@ -364,7 +392,10 @@ Three groups, each yours to set:
 
 By default every group runs on the profile's own model: the `model` in that profile's
 Claude Code `settings.json`, or Codex `config.toml`, or the tool's built-in default when
-neither is set. A setting for one GM beats the global one. `default` puts a group back on
+neither is set. A setting for one GM beats the global one. A profile on OpenRouter keeps the model
+it was made with even when a global setting names one, because global settings use the tool's own
+ids (`claude-opus-5`), which OpenRouter calls something else (`anthropic/claude-opus-5`); a setting
+for one GM still applies, so give it an OpenRouter id. `default` puts a group back on
 the profile's model: `am config model.tm default`, or `--tm-model default`.
 
 Name models by their official ids: `claude-fable-5-1`, `claude-opus-5`, `claude-sonnet-5`,
@@ -515,6 +546,10 @@ answers from what is written down.
 
 **A Codex agent refused the model name.** Codex has its own names. Set them with
 `model.codex-agents` (or `--codex-agent-model`), not `model.agents`.
+
+**An OpenRouter profile fails with "401 User not found".** OpenRouter no longer accepts the key.
+Put a new one in the profile's `settings.json` (`env.ANTHROPIC_AUTH_TOKEN`, Claude Code) or
+`openrouter.key` (Codex), or remove the profile and add it again.
 
 **A profile shows "not signed in".** Run `am run <profile>` and sign in with `/login`
 (Claude Code) or let `codex login` run (Codex).

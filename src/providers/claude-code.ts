@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { buildEnv } from '../core/env.js';
+import { readHarness } from '../core/harness.js';
+import { openRouterIdentity, openRouterNote } from './openrouter.js';
 import { estimateCost } from '../usage/pricing.js';
 import type { Identity, InstallInfo, LaunchSpec, Provider, UsageSnapshot } from './types.js';
 import { emptyUsage, makeTotals } from './types.js';
@@ -76,6 +78,9 @@ export const claudeCode: Provider = {
   },
 
   async readIdentity(home: string): Promise<Identity> {
+    // The OpenRouter key in settings.json wins over any /login the directory also holds, in the tool too.
+    const harness = readHarness('claude-code', home);
+    if (harness.backend === 'openrouter') return openRouterIdentity(harness.keyHint);
     const cfg = readJsonFile<{ oauthAccount?: OAuthAccount }>(configJsonPath(home));
     const oa = cfg?.oauthAccount;
     if (!oa?.emailAddress) return { loggedIn: false };
@@ -90,8 +95,9 @@ export const claudeCode: Provider = {
   },
 
   async readUsage(home: string): Promise<UsageSnapshot> {
+    const onOpenRouter = openRouterNote(readHarness('claude-code', home));
     const projects = path.join(home, 'projects');
-    if (!fs.existsSync(projects)) return emptyUsage('no transcripts yet');
+    if (!fs.existsSync(projects)) return emptyUsage(onOpenRouter ?? 'no transcripts yet');
 
     const now = Date.now();
     const weekAgo = now - 7 * 864e5;
@@ -100,7 +106,7 @@ export const claudeCode: Provider = {
       newerThan: weekAgo,
       maxFiles: 1500,
     });
-    if (files.length === 0) return emptyUsage('no activity in the last 7 days');
+    if (files.length === 0) return emptyUsage(onOpenRouter ?? 'no activity in the last 7 days');
 
     const d24 = makeTotals();
     const d7 = makeTotals();
@@ -161,7 +167,7 @@ export const claudeCode: Provider = {
       estCost24h,
       lastActivity: lastActivity || undefined,
       source: 'local',
-      note: 'quota % needs --live',
+      note: onOpenRouter ?? 'quota % needs --live',
     };
   },
 

@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { buildEnv } from '../core/env.js';
+import { readHarness } from '../core/harness.js';
+import { openRouterIdentity, openRouterNote } from './openrouter.js';
 import type { Identity, InstallInfo, LaunchSpec, Provider, UsageSnapshot, Window } from './types.js';
 import { emptyUsage, makeTotals } from './types.js';
 import { collectFiles, decodeJwtPayload, readJsonFile, readTail, tryVersion, which } from './util.js';
@@ -66,6 +68,8 @@ export const codex: Provider = {
   },
 
   async readIdentity(home: string): Promise<Identity> {
+    const harness = readHarness('codex', home);
+    if (harness.backend === 'openrouter') return openRouterIdentity(harness.keyHint);
     const auth = readJsonFile<AuthFile>(path.join(home, 'auth.json'));
     if (!auth) return { loggedIn: false };
 
@@ -96,8 +100,9 @@ export const codex: Provider = {
    * no API call. We read the newest rollout that carries one.
    */
   async readUsage(home: string): Promise<UsageSnapshot> {
+    const onOpenRouter = openRouterNote(readHarness('codex', home));
     const sessions = path.join(home, 'sessions');
-    if (!fs.existsSync(sessions)) return emptyUsage('no sessions yet');
+    if (!fs.existsSync(sessions)) return emptyUsage(onOpenRouter ?? 'no sessions yet');
 
     const now = Date.now();
     const weekAgo = now - 7 * 864e5;
@@ -105,7 +110,7 @@ export const codex: Provider = {
     const files = collectFiles(sessions, (n) => n.startsWith('rollout-') && n.endsWith('.jsonl'), {
       maxFiles: 800,
     });
-    if (files.length === 0) return emptyUsage('no sessions yet');
+    if (files.length === 0) return emptyUsage(onOpenRouter ?? 'no sessions yet');
 
     let windows: Window[] = [];
     let lastActivity = 0;
@@ -182,7 +187,7 @@ export const codex: Provider = {
       tokens7d: d7,
       lastActivity: lastActivity || undefined,
       source: 'local',
-      note: windows.length === 0 ? 'no quota data cached yet' : undefined,
+      note: windows.length > 0 ? undefined : (onOpenRouter ?? 'no quota data cached yet'),
     };
   },
 

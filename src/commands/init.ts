@@ -63,7 +63,7 @@ export async function initCommand(opts: { yes?: boolean } = {}): Promise<void> {
   if (found.length === 0) {
     console.log('');
     console.log(dim('  Nothing signed in yet. Install a tool, sign in, then re-run `am init`.'));
-    console.log(dim('  Or run `am profile add` to create an isolated profile and sign in through it.'));
+    console.log(dim('  Or run `am profile add` to create an isolated profile: sign in through it, or give it an OpenRouter key.'));
     console.log('');
     closePrompts();
     return;
@@ -145,7 +145,7 @@ export async function initCommand(opts: { yes?: boolean } = {}): Promise<void> {
   await offerShellHook(opts.yes);
   console.log('');
   console.log('  Next:');
-  console.log(`    ${cyan('am profile add')}                create a second, isolated profile and sign in`);
+  console.log(`    ${cyan('am profile add')}                another profile: a second subscription, or an OpenRouter key and model`);
   console.log(`    ${cyan('am status')}                     plan, quota and consumption for every account`);
   console.log(`    ${cyan('am gm start <profile> [name]')}  in a project folder: start a General Manager and its team`);
   console.log('');

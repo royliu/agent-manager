@@ -29,7 +29,7 @@ am --version
 
 ```sh
 am init              # register the accounts you're already signed into, install the shell hook
-am profile add       # create a second, isolated profile and sign in
+am profile add       # a new isolated profile: Claude Code or Codex, its own login or OpenRouter, a model
 am status            # home screen: plan, quota and consumption per profile; every GM
 am run work          # open a tool on a profile (short for am profile run)
 ```
@@ -63,6 +63,37 @@ existing install keeps working exactly as it did.
 token in the Keychain, which makes it look like profiles would collide. They
 don't: a fresh `CLAUDE_CONFIG_DIR` reports "Not logged in" even with a Keychain
 entry present, so each profile holds its own login.
+
+## Profiles on OpenRouter
+
+A Claude Code or Codex profile can reach its model through [OpenRouter](https://openrouter.ai)
+with an API key instead of a subscription login. `am profile add` asks three things: the tool,
+how it reaches a model (its own login, or OpenRouter), and the model.
+
+```sh
+am profile add kimi                 # Claude Code → OpenRouter → paste the key → pick a model
+am run kimi                         # no sign-in; billed per token on OpenRouter
+am gm start kimi friday             # a GM, its task manager and its agents all on that model
+```
+
+Without prompts, the key comes from `OPENROUTER_API_KEY` (never from the command line) and the
+model is any id from openrouter.ai/models:
+
+```sh
+OPENROUTER_API_KEY=sk-or-… am profile add glm -p codex --openrouter -m z-ai/glm-5.3 -y
+```
+
+`am` checks the key and the model id with OpenRouter before it writes anything, then sets the
+tool up in the profile's own config, so everything that starts the tool there follows it:
+Claude Code's `settings.json` gets OpenRouter's base URL, the key and the model, with every model
+alias the tool uses internally mapped to it; Codex's `config.toml` gets an `openrouter` model
+provider whose key it reads from `openrouter.key` beside it (mode 600). A native profile can pin a
+model the same way: `am profile add work -p claude-code -m claude-opus-5`.
+
+Claude Code and Codex are built around their makers' models; others run through OpenRouter but
+may handle the tools less well. An OpenRouter profile keeps its own model even when `am config model.*` sets one for every GM,
+since those are named for the tool's own service. `am status` shows it as `OpenRouter` with the
+model and the key's last four characters.
 
 ## The billing trap
 
@@ -203,7 +234,7 @@ watches each agent's context and drives the checkpoint-and-fresh-session step it
 | `am init` | first-run setup: register existing logins, install the shell hook |
 | `am doctor` | installs, logins, isolation, the shell hook, billing-override checks |
 | `am profile ls` | list profiles; the active one is marked |
-| `am profile add [name]` | guided setup for a new isolated profile |
+| `am profile add [name] [-m <model>] [--openrouter]` | guided setup for a new isolated profile: the tool, its own login or OpenRouter, the model (also `am profile init`) |
 | `am profile rm <name> [--purge]` | unregister (and optionally delete) a profile |
 | `am profile use <name>` | switch this shell to a profile (with the hook) |
 | `am run <name> [-- args]` · `am profile run` | open a tool on a profile, in the foreground |

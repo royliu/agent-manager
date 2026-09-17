@@ -24,6 +24,46 @@ export async function ask(question: string, fallback?: string): Promise<string> 
   return answer.length > 0 ? answer : (fallback ?? '');
 }
 
+/**
+ * Ask for a secret without echoing it, so an API key never lands in the scrollback. Reads the raw
+ * terminal itself rather than muting readline, whose echo hook is not public.
+ */
+export async function askSecret(question: string): Promise<string> {
+  closePrompts();
+  stdout.write(`${cyan('?')} ${question} `);
+  return new Promise((resolve) => {
+    let value = '';
+    const finish = (): void => {
+      stdin.off('data', onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdout.write('\n');
+    };
+    const onData = (chunk: Buffer): void => {
+      const text = chunk.toString('utf8');
+      if (text.startsWith('\u001b')) return; // arrow keys and other escape sequences
+      for (const ch of text) {
+        if (ch === '\r' || ch === '\n') {
+          finish();
+          resolve(value.trim());
+          return;
+        }
+        if (ch === '\u0003') {
+          // Ctrl-C: raw mode swallows the signal, so leave the way the terminal would have.
+          finish();
+          process.exit(130);
+        }
+        if (ch === '\u007f' || ch === '\b') value = value.slice(0, -1);
+        else if (ch === '\u0015') value = ''; // Ctrl-U
+        else if (ch >= ' ') value += ch;
+      }
+    };
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.on('data', onData);
+  });
+}
+
 export async function confirm(question: string, defaultYes = true): Promise<boolean> {
   const hint = defaultYes ? 'Y/n' : 'y/N';
   const answer = (await iface().question(`${cyan('?')} ${question} ${dim(`(${hint})`)} `))

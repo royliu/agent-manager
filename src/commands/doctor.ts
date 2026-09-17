@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { getActive, loadConfig } from '../core/config.js';
 import { detectHazards } from '../core/env.js';
+import { readHarness } from '../core/harness.js';
 import {
   findDuplicateAccounts, redundantMember, type AccountMember,
 } from '../core/duplicates.js';
@@ -88,6 +89,7 @@ export async function doctorCommand(): Promise<void> {
     }
 
     const identity = await readIdentitySafe(provider, p.home);
+    const harness = readHarness(p.provider, p.home);
     members.push({
       name: p.name,
       provider: p.provider,
@@ -98,8 +100,8 @@ export async function doctorCommand(): Promise<void> {
       identity.loggedIn
         ? {
             level: 'ok',
-            title: `${p.name} (${provider.short}) signed in`,
-            detail: [identity.account, identity.plan].filter(Boolean).join(' · '),
+            title: `${p.name} (${provider.short}) ${harness.backend === 'openrouter' ? 'on OpenRouter' : 'signed in'}`,
+            detail: (harness.backend === 'openrouter' ? [harness.model ?? 'no model set', identity.account] : [identity.account, identity.plan]).filter(Boolean).join(' · '),
           }
         : {
             level: 'warn',
