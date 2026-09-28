@@ -6,6 +6,7 @@ import { openClient, type TmClient } from '../swarm/client.js';
 import type { Agent, Question, Task } from '../swarm/model.js';
 import { resolveSwarmName } from '../swarm/registry.js';
 import { needsYou, statusLabel, type BoardSnapshot } from '../swarm/service.js';
+import { memCell } from '../swarm/memguard.js';
 import { bold, cyan, dim, padEnd, truncateVisible, usd, width } from '../ui/format.js';
 import { noSwarm } from './gm.js';
 import fs from 'node:fs';
@@ -291,7 +292,7 @@ function pack(cells: string[], W: number, indent: string, maxLines: number): str
   return lines;
 }
 
-function header(snap: BoardSnapshot, st: UiState, W: number): string[] {
+export function header(snap: BoardSnapshot, st: UiState, W: number): string[] {
   const gm = snap.meta.name;
   const ws = snap.workspace;
   const narrow = W < 110;
@@ -301,9 +302,13 @@ function header(snap: BoardSnapshot, st: UiState, W: number): string[] {
   const left = ` ${bold(gm)}${dim(` · ${place}${ws?.branch ? ` · ${ws.branch}` : ''}`)}`;
   const q = snap.quota;
   const quotaFull = q ? `${q.profile} ${dim(q.label)} ${q.usedPercent >= 0 ? `${bar(q.usedPercent)} ${Math.round(q.usedPercent)}%` : dim('no quota data')}` : snap.meta.profile;
-  const sessions = dim(` · ${snap.team.length + 1} sessions${snap.gmContextPct !== undefined ? ` · ${gm} ctx ${snap.gmContextPct}%` : ''} `);
+  // Agent-script memory against limits.mem-stop-gb, right after the sessions; the Mac's own figure goes first when narrow.
+  const memWide = memCell(snap.memory, !narrow);
+  const memNarrow = memCell(snap.memory, false);
+  const sessionsWith = (mem: string) => dim(` · ${snap.team.length + 1} sessions`) + (mem ? `${dim(' · ')}${mem}` : '') + dim(`${snap.gmContextPct !== undefined ? ` · ${gm} ctx ${snap.gmContextPct}%` : ''} `);
   const quotaShort = q && q.usedPercent >= 0 ? `${bar(q.usedPercent, 6)} ${Math.round(q.usedPercent)}% ` : `${snap.meta.profile} `;
-  const l1 = twoSided(left, [quotaFull + sessions, quotaFull + ' ', quotaShort, ''], W);
+  const memOnly = memNarrow ? `${memNarrow} ` : '';
+  const l1 = twoSided(left, [quotaFull + sessionsWith(memWide), quotaFull + sessionsWith(memNarrow), `${quotaFull}${dim(' · ')}${memOnly}`, quotaShort + memOnly, memOnly, quotaShort, ''], W);
   const strip = pack(snap.team.map((a) => agentState(a, snap, narrow).text), W, narrow ? ' ' : ` ${dim('team ')}`, narrow ? 2 : 1);
   const groupTabs = (['status', 'agent', 'eta'] as Group[]).map((g) => (g === st.group ? cyan(bold(`[${g}]`)) : dim(` ${g} `))).join('');
   const filterCell = st.mode === 'filter' ? `${st.filter}▏` : st.filter ? cyan(st.filter) : dim('—');

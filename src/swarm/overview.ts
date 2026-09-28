@@ -2,6 +2,7 @@ import { readSummary, serviceRunning, TmClient } from './client.js';
 import { listSwarms } from './registry.js';
 import { isActive, needsYou, type BoardSummary } from './service.js';
 import { Store } from './store.js';
+import type { MemView } from './memguard.js';
 
 /** One GM as the home screen shows it. */
 export interface GmRow {
@@ -12,6 +13,8 @@ export interface GmRow {
   needYou: number;
   working: number;
   open: number;
+  /** Agent-script memory, when the task manager answered. */
+  memory?: MemView;
 }
 
 async function summaryWithin(name: string, ms: number): Promise<BoardSummary | undefined> {
@@ -39,7 +42,7 @@ export async function gmOverview(): Promise<GmRow[]> {
     const running = serviceRunning(s.name);
     const live = running ? await summaryWithin(s.name, 1500) : undefined;
     if (live) {
-      rows.push({ name: s.name, profile: s.profile, dir: s.dir, running, needYou: live.needYou, working: live.running, open: live.active });
+      rows.push({ name: s.name, profile: s.profile, dir: s.dir, running, needYou: live.needYou, working: live.running, open: live.active, memory: live.memory });
       continue;
     }
     const tasks = new Store(s.name).all();

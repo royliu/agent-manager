@@ -7,6 +7,7 @@ import type { ProviderId } from '../core/config.js';
 import { toRows, type Row } from '../ui/rows.js';
 import { tildify } from '../core/paths.js';
 import { gmOverview, type GmRow } from '../swarm/overview.js';
+import { memCell } from '../swarm/memguard.js';
 import {
   bar, bold, cyan, dim, green, listPhrase, padEnd, pct, red, relTime, tokens, truncateVisible, untilTime,
   usd, width, yellow,
@@ -39,13 +40,20 @@ function gmLines(gms: GmRow[], nameW: number): string[] {
   if (!gms.length) return [];
   const board = (g: GmRow) =>
     g.running
-      ? `${g.needYou ? yellow(`${g.needYou} need you`) : dim('nothing needs you')} · ${g.working} working · ${g.open} open`
+      ? `${g.needYou ? yellow(`${g.needYou} need you`) : dim('nothing needs you')} · ${g.working} working · ${g.open} open${g.memory ? ` · ${memCell(g.memory, false)}` : ''}`
       : dim(`${g.open} open`);
   const boardW = Math.max(7, ...gms.map((g) => width(board(g)))) + 2;
   const out = [''];
   out.push('  ' + padEnd(dim('GM'), nameW) + padEnd(dim('PROFILE'), 12) + padEnd(dim('STATE'), 10) + padEnd(dim('BOARD'), boardW) + dim('FOLDER'));
   for (const g of gms) {
     out.push(`  ${padEnd(bold(g.name), nameW)}${padEnd(g.profile, 12)}${padEnd(g.running ? green('running') : dim('stopped'), 10)}${padEnd(board(g), boardW)}${dim(tildify(g.dir))}`);
+    if (g.memory?.held) out.push(dim(`  ${padEnd('', nameW)}↳ next run waits: ${g.memory.held}`));
+  }
+  // The limits once, and the Mac's own figure, from the first GM that measured it.
+  const m = gms.find((g) => g.memory)?.memory;
+  if (m) {
+    const mac = m.macUsedBytes !== undefined && m.macTotalBytes ? ` · mac ${Math.round(m.macUsedBytes / 2 ** 30)}/${Math.round(m.macTotalBytes / 2 ** 30)} GB` : '';
+    out.push(dim(`  mem = agent scripts · new runs wait above ${m.holdGb} GB · newest stopped above ${m.stopGb} GB · max ${m.maxWorking} working${mac}`));
   }
   return out;
 }
