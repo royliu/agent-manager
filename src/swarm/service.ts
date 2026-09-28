@@ -21,6 +21,7 @@ import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, reso
 import { Store, writeJsonAtomic } from './store.js';
 import { readClaudeSession, type SessionStats } from './transcript.js';
 import { triageQuestion } from './triage.js';
+import { ago, describeUnit, gb, GB, macMemory, planStops, readPs, scriptUnits, type MemView, type Owner, type Proc, type ScriptUnit } from './memguard.js';
 
 type Params = Record<string, unknown>;
 const str = (p: Params, k: string, req = true): string => {
@@ -89,6 +90,8 @@ export interface BoardSnapshot {
   needYou: number;
   quota?: { profile: string; label: string; usedPercent: number; resetsAt?: number; plan?: string; account?: string };
   gmContextPct?: number;
+  /** Agent-script memory against the limits, from the memory guard's last sample. */
+  memory?: MemView;
   takenAt: number;
 }
 
@@ -109,6 +112,7 @@ export interface BoardSummary {
   active: number;
   quota?: BoardSnapshot['quota'];
   gmContextPct?: number;
+  memory?: MemView;
   takenAt: number;
 }
 
@@ -603,6 +607,7 @@ export class TaskManagerService {
       active: tasks.filter(isActive).length,
       quota: this.quotaCache?.value,
       gmContextPct: this.gmContextPct(),
+      memory: this.memView(),
       takenAt: this.now(),
     };
   }
@@ -622,6 +627,7 @@ export class TaskManagerService {
       needYou: tasks.filter(needsYou).length,
       quota: this.quotaCache?.value,
       gmContextPct,
+      memory: this.memView(),
       takenAt: this.now(),
     };
   }
@@ -1355,7 +1361,9 @@ export class TaskManagerService {
     if (this.stopping) return;
     try {
       await this.refreshQuota();
+      this.guardMemory();
       this.watch();
+      this.startDeferred();
       this.assign();
     } catch (e) {
       this.log(`tick error: ${e instanceof Error ? e.message : String(e)}`);
@@ -1400,13 +1408,13 @@ export class TaskManagerService {
 
   private assign(): void {
     const team = this.store.team();
-    const idle = team.filter((a) => a.state === 'idle' && !a.paused);
+    const idle = team.filter((a) => a.state === 'idle' && !a.paused && !this.deferred.has(a.name));
     if (!idle.length) return;
     // What a free agent may pick up: tasks someone started, and, with autostart, any open task that is not
     // parked on hold and not waiting on another task. Most urgent first: priority, then ETA, then age.
     const all = this.store.all();
     const queued = all
-      .filter((t) => t.status === 'open' && !t.hold && (t.dispatchRequested || this.cfg.autostart) && this.unmetDeps(t).length === 0)
+      .filter((t) => t.status === 'open' && !t.hold && (t.dispatchRequested || this.cfg.autostart) && this.unmetDeps(t).length === 0 && !this.deferredTask(t.id))
       .sort((a, b) => a.priority - b.priority || (a.eta ?? Infinity) - (b.eta ?? Infinity) || a.id - b.id);
     /** The agent that knows this corner best: worked on this task, its parent, or a sibling. */
     const familiar = (t: Task): string[] => {
@@ -1426,6 +1434,8 @@ export class TaskManagerService {
         }
         continue;
       }
+      // Too many working, the agents' scripts holding too much memory, or another run started moments ago: the task waits.
+      if (this.startBlock()) break;
       /**
        * ═══ TWO LANES NEVER EDIT THE SAME FILE AT ONCE ═══ (friday, 17 Sep 2026)
        *
@@ -1462,7 +1472,11 @@ export class TaskManagerService {
       this.startRun(t, agent);
       if (!idle.length) break;
     }
-    // Quota freed up: release held tasks.
+    this.releaseQuota();
+  }
+
+  /** Quota freed up: release held tasks. */
+  private releaseQuota(): void {
     if (this.limitUntil && this.limitUntil <= this.now()) {
       this.limitUntil = 0;
       this.event('task manager', 'the account\'s limit window has passed; work starts again');
@@ -1476,6 +1490,171 @@ export class TaskManagerService {
           this.changed(t.id);
         }
       }
+    }
+  }
+
+  // ------------------------------------------------------------ memory guard
+  /** The guard's last sample of the process table. */
+  private mem?: { at: number; scriptsBytes: number; mac?: { usedBytes: number; totalBytes: number } };
+  /** Process groups of agent scripts seen before: an orphan whose shell died is still found through its group. */
+  private scriptGroups = new Map<number, Owner>();
+  /** Processes sent SIGTERM, to be sent SIGKILL on the next tick if they are still there. */
+  private stopping2 = new Map<number, string>();
+  private lastStopAt?: number;
+  /** When scripts of each task were stopped, and when the GM was last told about that task. */
+  private stopsByTask = new Map<number, number[]>();
+  private stopsSaid = new Map<number, number>();
+  /** When the last agent run started, for limits.restart-gap-sec. */
+  private lastStartAt = 0;
+  /** Runs that were due to start with a message but had to wait (agent → task and message). */
+  private deferred = new Map<string, { taskId: number; message?: string; since: number; why: string }>();
+
+  private deferredTask(id: number): boolean {
+    for (const d of this.deferred.values()) if (d.taskId === id) return true;
+    return false;
+  }
+
+  private working(): number {
+    let n = 0;
+    for (const name of this.children.keys()) if (this.runAlive(name)) n += 1;
+    return n;
+  }
+
+  /** Why no new agent run may start right now, or undefined when one may. */
+  private startBlock(): string | undefined {
+    const working = this.working();
+    if (working >= this.cfg.maxWorking) return `${working} agents are working (limits.max-working ${this.cfg.maxWorking})`;
+    if (this.mem && this.mem.scriptsBytes > this.cfg.memHoldGb * GB) return `agent scripts use ${gb(this.mem.scriptsBytes)} GB (limits.mem-hold-gb ${this.cfg.memHoldGb})`;
+    const wait = this.lastStartAt + this.cfg.restartGapSec * 1000 - this.now();
+    if (wait > 0) return `starting one run every ${this.cfg.restartGapSec} s (limits.restart-gap-sec); next in ${Math.ceil(wait / 1000)} s`;
+    return undefined;
+  }
+
+  private memView(): MemView | undefined {
+    if (!this.mem) return undefined;
+    return {
+      scriptsBytes: this.mem.scriptsBytes,
+      holdGb: this.cfg.memHoldGb,
+      stopGb: this.cfg.memStopGb,
+      macUsedBytes: this.mem.mac?.usedBytes,
+      macTotalBytes: this.mem.mac?.totalBytes,
+      stoppedAt: this.lastStopAt,
+      working: this.working(),
+      maxWorking: this.cfg.maxWorking,
+      held: this.startBlock(),
+      at: this.mem.at,
+    };
+  }
+
+  /** A continuation that could not start: it goes first once runs may start again. */
+  private defer(t: Task, a: Agent, message: string | undefined, why: string): void {
+    const had = this.deferred.get(a.name);
+    this.deferred.set(a.name, { taskId: t.id, message, since: had?.since ?? this.now(), why });
+    if (had?.taskId === t.id) return;
+    t.progress = 'waiting to start';
+    this.store.save(t);
+    this.event('task manager', `${a.name} will continue #${t.id} when runs may start again: ${why}`, t.id);
+    this.changed(t.id);
+  }
+
+  private startDeferred(): void {
+    const queue = [...this.deferred.entries()].sort((x, y) => x[1].since - y[1].since);
+    for (const [name, d] of queue) {
+      const t = this.store.get(d.taskId);
+      const a = this.agent(name);
+      // Moved on meanwhile (cancelled, reassigned, held, agent paused): assign() handles it the normal way.
+      if (!t || !a || t.status !== 'open' || t.hold || a.paused || a.state !== 'idle' || this.runAlive(name) || (t.agent && t.agent !== name)) {
+        this.deferred.delete(name);
+        continue;
+      }
+      const why = this.startBlock();
+      if (why) {
+        d.why = why;
+        return;
+      }
+      this.deferred.delete(name);
+      this.startRun(t, a, d.message);
+    }
+  }
+
+  /**
+   * Every tick: measure what the agents' scripts hold. Over limits.mem-stop-gb, stop them newest first,
+   * each as a whole process group or tree, until they are back under limits.mem-hold-gb.
+   */
+  private guardMemory(): void {
+    if (this.mem && this.now() - this.mem.at < 4000) return;
+    let procs: Proc[];
+    try {
+      procs = readPs();
+    } catch (e) {
+      this.log(`memory guard: ps failed: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    const alive = new Map(procs.map((p) => [p.pid, p]));
+    // Finish what the last tick started: anything that ignored SIGTERM gets SIGKILL.
+    for (const [pid, command] of this.stopping2) {
+      if (alive.get(pid)?.command === command) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* gone */
+        }
+      }
+      this.stopping2.delete(pid);
+    }
+    const roots = new Map<number, Owner>();
+    for (const [name, child] of this.children) {
+      if (!child.pid || !this.runAlive(name)) continue;
+      roots.set(child.pid, { agent: name, taskId: this.agent(name)?.taskId });
+    }
+    // The board server, and everything above it (the shell or tmux that launched it), is never a script.
+    const protectedPids = new Set<number>([process.pid]);
+    for (let p = alive.get(process.pid); p && p.ppid > 1 && !protectedPids.has(p.ppid); p = alive.get(p.ppid)) protectedPids.add(p.ppid);
+    const { units } = scriptUnits(procs, roots, this.scriptGroups, protectedPids);
+    const live = units.filter((u) => !u.procs.every((p) => this.stopping2.has(p.pid)));
+    const total = live.reduce((n, u) => n + u.rss, 0);
+    this.mem = { at: this.now(), scriptsBytes: total, mac: macMemory() };
+    const stops = planStops(live, this.cfg.memHoldGb * GB, this.cfg.memStopGb * GB);
+    for (const u of stops) this.stopScript(u, total);
+    if (stops.length) {
+      const freed = stops.reduce((n, u) => n + u.rss, 0);
+      this.mem.scriptsBytes = Math.max(0, total - freed);
+      this.push({ event: 'team' });
+    }
+  }
+
+  private stopScript(u: ScriptUnit, total: number): void {
+    if (u.pgid) {
+      try {
+        process.kill(-u.pgid, 'SIGTERM');
+      } catch {
+        /* gone */
+      }
+    }
+    for (const p of u.procs) {
+      try {
+        process.kill(p.pid, 'SIGTERM');
+      } catch {
+        /* gone */
+      }
+      this.stopping2.set(p.pid, p.command);
+    }
+    const now = this.now();
+    this.lastStopAt = now;
+    const what = `${describeUnit(u)}, ${gb(u.rss)} GB, started ${ago(u.age)}`;
+    this.log(`memory guard stopped ${u.key} of ${u.owner.agent} (${what}); agent scripts used ${gb(total)} GB`);
+    const t = u.owner.taskId !== undefined ? this.store.get(u.owner.taskId) : undefined;
+    if (!t) return;
+    this.note(t, 'task manager', 'finding', `The memory guard stopped a check (${what}) because agent scripts used ${gb(total)} GB, over limits.mem-stop-gb ${this.cfg.memStopGb}. Run it again; it will wait if memory is still high.`);
+    this.store.save(t);
+    this.event('task manager', `memory guard stopped ${describeUnit(u)} (${gb(u.rss)} GB)`, t.id);
+    this.changed(t.id);
+    const recent = (this.stopsByTask.get(t.id) ?? []).filter((at) => now - at < 3_600_000);
+    recent.push(now);
+    this.stopsByTask.set(t.id, recent);
+    if (recent.length >= 2 && now - (this.stopsSaid.get(t.id) ?? 0) > 3_600_000) {
+      this.stopsSaid.set(t.id, now);
+      this.inbox('note', `The memory guard has stopped scripts of #${t.id} ${t.title} ${recent.length} times in the last hour (latest: ${what}; agent scripts used ${gb(total)} GB). Its checks may be too heavy or may leak processes: look at what ${u.owner.agent} is running, narrow its checks, or put it on hold.`, t.id);
     }
   }
 
@@ -1829,6 +2008,13 @@ export class TaskManagerService {
       if (running.exitCode === null && running.signalCode === null) return;
       this.children.delete(a.name);
     }
+    // Too many working, too much script memory, or another run started moments ago: wait, message and all.
+    const block = this.startBlock();
+    if (block) {
+      this.defer(t, a, message, block);
+      return;
+    }
+    this.deferred.delete(a.name);
     const prof = profileByName(a.profile);
     if (!prof) {
       this.inbox('note', `Agent ${a.name} points at a profile that no longer exists (${a.profile}).`);
@@ -1908,6 +2094,7 @@ export class TaskManagerService {
       return;
     }
     run.pid = child.pid;
+    this.lastStartAt = this.now();
     t.runs.push(run);
     t.status = 'in_progress';
     t.blockedOn = undefined;
