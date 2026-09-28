@@ -232,6 +232,14 @@ export const SwarmConfigSchema = z.object({
   budgetUsd: z.number().optional(),
   quotaWarnAt: z.number().default(80),
   quotaHoldAt: z.number().default(95),
+  /** Task agents working at once on this GM. Auto-start does not start more; the next waits for a free slot. */
+  maxWorking: z.number().int().min(1).max(64).default(4),
+  /** GB of memory the agents' scripts may hold before no new agent run starts. */
+  memHoldGb: z.number().min(0.5).default(16),
+  /** GB of memory above which the guard stops agent scripts, newest first, until they are back under memHoldGb. */
+  memStopGb: z.number().min(1).default(24),
+  /** Seconds between two agent runs starting, so a board start, a limit reset or a wake does not start every agent at once. */
+  restartGapSec: z.number().min(0).default(60),
   /** Show the profile's own status line (claude-hud, if installed anywhere) above the swarm line in the GM session. */
   hud: z.boolean().default(true),
   /** Environment variable that pins the tool's own auto-compaction threshold, if it has one. */
