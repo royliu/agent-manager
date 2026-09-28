@@ -466,6 +466,10 @@ model each group runs on and where the choice came from: set for this GM, set wi
 | `agent.compact-env` | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | environment variable that asks the tool itself to compact at `agent.compact-at` |
 | `limits.budget-usd` | unset | list-price budget per agent per day; work pauses when it is reached |
 | `limits.quota-warn`, `limits.quota-hold` | 80, 95 | subscription quota percentages at which you are warned, and at which new work is held |
+| `limits.max-working` | 4 | task agents working at once per GM; auto-start starts no more and the next task waits |
+| `limits.mem-hold-gb` | 16 | GB the agents' scripts (checks, builds, tests; not the agents themselves) may use before no new run starts |
+| `limits.mem-stop-gb` | 24 | GB above which the memory guard stops the agents' newest scripts until they are back under `limits.mem-hold-gb` |
+| `limits.restart-gap-sec` | 60 | seconds between two agent runs starting, so a board start, a limit reset or a wake starts agents one at a time |
 
 Names from before 0.7.0 (`swarm.agentModel`, `swarm.compactAt`, …) are accepted and mapped to
 these.
@@ -503,6 +507,15 @@ Guard rails: `limits.budget-usd` pauses an agent for the day when its list-price
 the budget; `limits.quota-hold` holds new work when the subscription's quota window is
 nearly used, and `limits.quota-warn` warns you before that. `K` on the board pauses everyone at
 once.
+
+Memory guard: every five seconds the task manager adds up what the agents' scripts hold — everything
+an agent's session started through its shell, with all of its children, and anything left in that
+shell's process group after its parent died. Above `limits.mem-hold-gb` no new run starts; above
+`limits.mem-stop-gb` the newest scripts are stopped, each as a whole process group or tree, until
+the total is back under the hold line, and the task gets a note saying what was stopped. The agents'
+own sessions, their MCP servers, the task manager, the GM and anything the agents did not start are
+never stopped. The board's top line and `am status` show the figure (`mem 9.2/24 GB`), green under the
+hold line, yellow above it, red at the stop line or after a stop in the last ten minutes.
 
 ## 12. Where things live
 
