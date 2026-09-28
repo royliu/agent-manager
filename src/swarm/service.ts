@@ -1504,7 +1504,7 @@ export class TaskManagerService {
   /** Process groups of agent scripts seen before: an orphan whose shell died is still found through its group. */
   private scriptGroups = new Map<number, Owner>();
   /** Processes sent SIGTERM, to be sent SIGKILL on the next tick if they are still there. */
-  private stopping2 = new Map<number, string>();
+  private terminating = new Map<number, string>();
   private lastStopAt?: number;
   /** When scripts of each task were stopped, and when the GM was last told about that task. */
   private stopsByTask = new Map<number, number[]>();
@@ -1596,8 +1596,9 @@ export class TaskManagerService {
       return;
     }
     const alive = new Map(procs.map((p) => [p.pid, p]));
-    // Finish what the last tick started: anything that ignored SIGTERM gets SIGKILL.
-    for (const [pid, command] of this.stopping2) {
+    // Finish what the last tick started: anything that ignored SIGTERM gets SIGKILL. What is dying is not counted again.
+    const dying = new Set(this.terminating.keys());
+    for (const [pid, command] of this.terminating) {
       if (alive.get(pid)?.command === command) {
         try {
           process.kill(pid, 'SIGKILL');
@@ -1605,7 +1606,7 @@ export class TaskManagerService {
           /* gone */
         }
       }
-      this.stopping2.delete(pid);
+      this.terminating.delete(pid);
     }
     const roots = new Map<number, Owner>();
     for (const [name, child] of this.children) {
@@ -1615,8 +1616,7 @@ export class TaskManagerService {
     // The board server, and everything above it (the shell or tmux that launched it), is never a script.
     const protectedPids = new Set<number>([process.pid]);
     for (let p = alive.get(process.pid); p && p.ppid > 1 && !protectedPids.has(p.ppid); p = alive.get(p.ppid)) protectedPids.add(p.ppid);
-    const { units } = scriptUnits(procs, roots, this.scriptGroups, protectedPids);
-    const live = units.filter((u) => !u.procs.every((p) => this.stopping2.has(p.pid)));
+    const { units: live } = scriptUnits(procs.filter((p) => !dying.has(p.pid)), roots, this.scriptGroups, protectedPids);
     const total = live.reduce((n, u) => n + u.rss, 0);
     this.mem = { at: this.now(), scriptsBytes: total, mac: macMemory() };
     const stops = planStops(live, this.cfg.memHoldGb * GB, this.cfg.memStopGb * GB);
@@ -1642,7 +1642,7 @@ export class TaskManagerService {
       } catch {
         /* gone */
       }
-      this.stopping2.set(p.pid, p.command);
+      this.terminating.set(p.pid, p.command);
     }
     const now = this.now();
     this.lastStopAt = now;
