@@ -19,7 +19,7 @@ import { RpcError } from './protocol.js';
 import { findSwarm, loadSwarmConfig, saveSwarm } from './registry.js';
 import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, resolveAgentProfile, resolveModel, ROLE_LABEL, windowFor, type ModelsView } from './models.js';
 import { Store, writeJsonAtomic } from './store.js';
-import { readClaudeSession, type SessionStats } from './transcript.js';
+import { readClaudeContextPct, readClaudeSession, type SessionStats } from './transcript.js';
 import { triageQuestion } from './triage.js';
 import { ago, describeUnit, gb, GB, macMemory, planStops, readPs, scriptUnits, type MemView, type Owner, type Proc, type ScriptUnit } from './memguard.js';
 
@@ -592,7 +592,7 @@ export class TaskManagerService {
   // ------------------------------------------------------------------ snapshot
   private gmContextPct(): number | undefined {
     if (!this.meta.gmSessionId || this.meta.provider !== 'claude-code') return undefined;
-    return readClaudeSession(this.profile.home, this.meta.gmSessionId, windowFor(resolveModel('gm', this.meta, this.cfg, this.profile).model, this.cfg.contextWindow)).contextPct;
+    return readClaudeContextPct(this.profile.home, this.meta.gmSessionId, windowFor(resolveModel('gm', this.meta, this.cfg, this.profile).model, this.cfg.contextWindow));
   }
 
   private summary(): BoardSummary {
