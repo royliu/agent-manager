@@ -18,7 +18,7 @@ import type { Push, Request, Response } from './protocol.js';
 import { RpcError } from './protocol.js';
 import { findSwarm, loadSwarmConfig, saveSwarm } from './registry.js';
 import { agentRole, modelArg, modelsView, MODEL_ROLES, normalizeModelValue, resolveAgentProfile, resolveModel, ROLE_LABEL, windowFor, type ModelsView } from './models.js';
-import { Store, writeJsonAtomic } from './store.js';
+import { mergeRepeat, Store, writeJsonAtomic } from './store.js';
 import { readClaudeContextPct, readClaudeSession, type SessionStats } from './transcript.js';
 import { triageQuestion } from './triage.js';
 import { ago, describeUnit, gb, GB, macMemory, planStops, readPs, scriptUnits, type MemView, type Owner, type Proc, type ScriptUnit } from './memguard.js';
@@ -469,6 +469,11 @@ export class TaskManagerService {
   }
   private note(t: Task, author: string, kind: Note['kind'], text: string): Note {
     const n: Note = { id: shortId('n'), author, kind, text, at: this.now() };
+    const merged = mergeRepeat(t.notes[t.notes.length - 1], n);
+    if (merged) {
+      t.notes[t.notes.length - 1] = merged;
+      return merged;
+    }
     t.notes.push(n);
     return n;
   }

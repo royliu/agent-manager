@@ -4,7 +4,7 @@ import type { z } from 'zod';
 import { ensureDir } from '../core/paths.js';
 import {
   AgentSchema, EventSchema, InboxItemSchema, SwarmMetaSchema, TaskSchema, WorkspaceSchema,
-  type Agent, type Event, type InboxItem, type SwarmMeta, type Task, type Workspace,
+  type Agent, type Event, type InboxItem, type Note, type SwarmMeta, type Task, type Workspace,
 } from './model.js';
 import { ensureSwarmDirs, type SwarmPaths } from './paths.js';
 
@@ -45,6 +45,36 @@ function readJsonl<T>(file: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>)
   return out;
 }
 
+const REPEAT_RE = / \((\d+) times since ([^)]+)\)$/;
+/** A note's text with its numbers, paths and repeat count taken out: two notes of the same shape say the same thing. */
+function noteShape(text: string): string {
+  return text.replace(REPEAT_RE, '').replace(/\S*\/\S*/g, '/').replace(/\d+/g, '#');
+}
+
+/**
+ * The task manager saying the same thing again ("friday-2's run ended with an error (exit 1); see …")
+ * becomes one note with a count, not another note. The overnight retry storm of 17 Sep left tasks with
+ * hundreds of these, all carried in every snapshot. Only the task manager's own notes are merged.
+ */
+export function mergeRepeat(prev: Note | undefined, next: Note): Note | undefined {
+  if (!prev || prev.author !== 'task manager' || next.author !== prev.author || prev.kind !== next.kind) return undefined;
+  if (noteShape(prev.text) !== noteShape(next.text)) return undefined;
+  const m = REPEAT_RE.exec(prev.text);
+  const n = m ? Number(m[1]) + 1 : 2;
+  const since = m ? m[2]! : new Date(prev.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return { ...next, text: `${next.text.replace(REPEAT_RE, '')} (${n} times since ${since})` };
+}
+
+export function collapseRepeats(notes: Note[]): Note[] {
+  const out: Note[] = [];
+  for (const n of notes) {
+    const merged = mergeRepeat(out[out.length - 1], n);
+    if (merged) out[out.length - 1] = merged;
+    else out.push(n);
+  }
+  return out;
+}
+
 /**
  * The swarm's files. The task manager service is the single writer; the board
  * and shell commands read through the service, never through this directly.
@@ -63,7 +93,9 @@ export class Store {
     for (const f of fs.readdirSync(this.paths.tasks)) {
       if (!f.endsWith('.json')) continue;
       const t = readJson(path.join(this.paths.tasks, f), TaskSchema);
-      if (t) this.tasks.set(t.id, t);
+      if (!t) continue;
+      t.notes = collapseRepeats(t.notes);
+      this.tasks.set(t.id, t);
     }
   }
 
