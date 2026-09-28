@@ -6,6 +6,7 @@ import { bold, cyan, dim, green, padEnd, red, width } from '../ui/format.js';
 /** `am config [group.key] [value]`: settings that apply to every GM. */
 export async function configCommand(key: string | undefined, value: string | undefined): Promise<void> {
   const entries = swarmConfigEntries();
+  const keyW = Math.max(22, ...entries.map((e) => e.key.length + 2));
   if (!key) {
     console.log('');
     let group = '';
@@ -18,10 +19,10 @@ export async function configCommand(key: string | undefined, value: string | und
       const shown = e.value === undefined ? dim(e.isModel ? "unset → the profile's own model" : 'unset') : JSON.stringify(e.value);
       // Long values (a tool list, a model name) push the meaning onto its own line rather than into the value.
       if (width(shown) > 30) {
-        console.log(`  ${padEnd(bold(e.key), 22)}${shown}`);
-        console.log(`  ${' '.repeat(22)}${dim(e.help)}`);
+        console.log(`  ${padEnd(bold(e.key), keyW)}${shown}`);
+        console.log(`  ${' '.repeat(keyW)}${dim(e.help)}`);
       } else {
-        console.log(`  ${padEnd(bold(e.key), 22)}${padEnd(shown, 32)}${dim(e.help)}`);
+        console.log(`  ${padEnd(bold(e.key), keyW)}${padEnd(shown, 32)}${dim(e.help)}`);
       }
     }
     console.log('');
