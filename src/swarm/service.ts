@@ -205,6 +205,26 @@ export function limitFromLog(file: string): { until: number; said: string } | nu
   return { until, said };
 }
 
+/**
+ * ═══ A RUN THAT REPORTED BUT NEVER EXITED (#2794, 20 Oct 2026) ═══
+ *
+ * friday-6 reported #2783 done at 06:45, but its process (and the task bridge under it) stayed alive until someone ended
+ * it at 08:00. The board showed friday-6 idle; every start for it found a live child in `children` and returned without
+ * a word, so #2792, pinned to friday-6, sat open for 25 minutes and nobody heard why. Now:
+ *   · a run whose task is no longer in progress on it (reported, asked, sent back, closed) and whose process is still
+ *     alive `LINGER_GRACE_MS` later is ended, it and everything under it: SIGTERM, then SIGKILL `LINGER_KILL_MS` on
+ *     (`reapLingering`), said in the log and on the task;
+ *   · a start that finds the agent's process still alive never returns silently: it waits, with the reason on the task;
+ *   · a task pinned to an agent the board shows as idle that has not started `PINNED_STALL_MS` on reaches the GM as
+ *     stalled, naming why it waits (`watchPinned`).
+ */
+export const LINGER_GRACE_MS = 90_000;
+export const LINGER_KILL_MS = 10_000;
+export const PINNED_STALL_MS = 5 * 60_000;
+/** The narrow check's seams (checks/linger.ts): a stand-in for launching an agent, and the deliberate fault "no_reap"
+ *  (a run that never exits is never ended). Never set in the task manager itself. */
+export const serviceSeams = { breakFor: '' as '' | 'no_reap', launch: null as null | ((a: Agent, t: Task) => ChildProcess) };
+
 export class TaskManagerService {
   readonly store: Store;
   readonly meta: SwarmMeta;
@@ -1368,8 +1388,10 @@ export class TaskManagerService {
       await this.refreshQuota();
       this.guardMemory();
       this.watch();
+      this.reapLingering();
       this.startDeferred();
       this.assign();
+      this.watchPinned();
     } catch (e) {
       this.log(`tick error: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -1413,7 +1435,15 @@ export class TaskManagerService {
 
   private assign(): void {
     const team = this.store.team();
-    const idle = team.filter((a) => a.state === 'idle' && !a.paused && !this.deferred.has(a.name));
+    /** #2794: an agent the board shows idle whose last run's process is still alive is not free yet. */
+    const lingering = new Set(team.filter((a) => a.state === 'idle' && !a.paused && this.runAlive(a.name)).map((a) => a.name));
+    const idle = team.filter((a) => a.state === 'idle' && !a.paused && !this.deferred.has(a.name) && !lingering.has(a.name));
+    for (const t of this.store.all()) {
+      if (t.status !== 'open' || t.hold || !t.dispatchRequested || !t.agent || !lingering.has(t.agent) || this.deferred.has(t.agent) || this.unmetDeps(t).length) continue;
+      const a = this.agent(t.agent);
+      const child = this.children.get(t.agent);
+      if (a && child) this.defer(t, a, undefined, this.lingerWhy(a.name, child));
+    }
     if (!idle.length) return;
     // What a free agent may pick up: tasks someone started, and, with autostart, any open task that is not
     // parked on hold and not waiting on another task. Most urgent first: priority, then ETA, then age.
@@ -1558,8 +1588,124 @@ export class TaskManagerService {
     if (had?.taskId === t.id) return;
     t.progress = 'waiting to start';
     this.store.save(t);
-    this.event('task manager', `${a.name} will continue #${t.id} when runs may start again: ${why}`, t.id);
+    this.event('task manager', `${a.name} will ${message ? 'continue' : 'start'} #${t.id} when it can: ${why}`, t.id);
     this.changed(t.id);
+  }
+
+  /** #2794: why an agent with a live process cannot start: which run it is and how long ago its task left it. */
+  private lingerWhy(name: string, child: ChildProcess): string {
+    const t = this.store.all().find((x) => x.runs.some((r) => r.agent === name && r.pid === child.pid));
+    const l = this.lingering.get(name);
+    const since = l ? ` for ${Math.max(1, Math.round((this.now() - l.since) / 1000))} s` : '';
+    return t
+      ? `${name}'s run on #${t.id} (process ${child.pid}) has not exited yet${t.status === 'in_progress' ? '' : ` though #${t.id} is ${statusLabel(t, this.gm())}${since}`}`
+      : `${name}'s previous process (${child.pid}) has not exited yet`;
+  }
+
+  /** Agents whose task left their run while the process stayed alive: since when, and when SIGTERM was sent. */
+  private lingering = new Map<string, { since: number; termAt?: number; pids: number[] }>();
+
+  /**
+   * #2794: end a run's process that outlived its task. A run is done with when its task is no longer in progress on it
+   * (reported, asked, sent back, stopped) or the run is closed; its process gets `LINGER_GRACE_MS` to exit on its own,
+   * then it and everything under it get SIGTERM, and SIGKILL `LINGER_KILL_MS` later. Its exit then closes the run the
+   * normal way (onExit), and a start waiting for the agent follows on the same tick.
+   */
+  private reapLingering(): void {
+    for (const [name, child] of this.children) {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        this.lingering.delete(name);
+        continue;
+      }
+      const t = this.store.all().find((x) => x.runs.some((r) => r.agent === name && r.pid === child.pid));
+      const run = t?.runs.find((r) => r.agent === name && r.pid === child.pid);
+      const done = !t || !run || !!run.endedAt || t.status !== 'in_progress' || t.agent !== name;
+      if (!done) {
+        this.lingering.delete(name);
+        continue;
+      }
+      const now = this.now();
+      const l = this.lingering.get(name) ?? { since: now, pids: [] };
+      this.lingering.set(name, l);
+      if (serviceSeams.breakFor === 'no_reap') continue;
+      if (l.termAt === undefined) {
+        if (now - l.since < LINGER_GRACE_MS) continue;
+        l.pids = this.treeOf(child.pid);
+        l.termAt = now;
+        for (const pid of l.pids) {
+          try { process.kill(pid, 'SIGTERM'); } catch { /* gone */ }
+        }
+        const why = t ? `#${t.id} is ${statusLabel(t, this.gm())}` : 'its run is gone';
+        this.log(`ended ${name}'s lingering run (process ${child.pid}${l.pids.length > 1 ? ` and ${l.pids.length - 1} under it` : ''}): ${why}, still alive ${Math.round((now - l.since) / 1000)} s on`);
+        if (t) this.event('task manager', `${name}'s run was still running ${Math.round((now - l.since) / 1000)} s after #${t.id} left it (${why}); ended it so ${name} can take work again`, t.id);
+      } else if (now - l.termAt >= LINGER_KILL_MS) {
+        for (const pid of l.pids) {
+          try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+        }
+        this.log(`killed ${name}'s lingering run (process ${child.pid}): it ignored SIGTERM`);
+        l.termAt = Infinity;
+      }
+    }
+  }
+
+  /** A process and everything under it, the process itself first. Just the process when the table cannot be read. */
+  private treeOf(pid: number | undefined): number[] {
+    if (!pid) return [];
+    let procs: Proc[] = [];
+    try {
+      procs = readPs();
+    } catch {
+      return [pid];
+    }
+    const out = [pid];
+    for (let i = 0; i < out.length; i += 1) for (const p of procs) if (p.ppid === out[i] && !out.includes(p.pid)) out.push(p.pid);
+    return out;
+  }
+
+  /** #2794: when each pinned task began waiting on an agent the board shows as idle, and the ones already told. */
+  private pinnedSince = new Map<number, number>();
+  private pinnedSaid = new Set<number>();
+
+  /**
+   * #2794: a task pinned to an agent the board shows as idle that has not started for `PINNED_STALL_MS` reaches the GM's
+   * inbox as stalled, once, with why it waits.
+   */
+  private watchPinned(): void {
+    const now = this.now();
+    const seen = new Set<number>();
+    for (const t of this.store.all()) {
+      if (t.status !== 'open' || t.hold || !t.dispatchRequested || !t.agent || this.unmetDeps(t).length) continue;
+      const a = this.agent(t.agent);
+      if (!a || a.state !== 'idle' || a.paused) continue;
+      seen.add(t.id);
+      const since = this.pinnedSince.get(t.id) ?? now;
+      this.pinnedSince.set(t.id, since);
+      if (now - since < PINNED_STALL_MS || this.pinnedSaid.has(t.id)) continue;
+      this.pinnedSaid.add(t.id);
+      const mins = Math.round((now - since) / 60_000);
+      const cause = this.waitCause(t, a);
+      this.event('task manager', `has waited ${mins} min for ${a.name}, shown idle: ${cause}`, t.id);
+      this.inbox('stalled', `#${t.id} ${t.title} is pinned to ${a.name}, which the board shows as idle, but it has not started for ${mins} minutes: ${cause}. If that does not clear by itself, stop ${a.name}'s old run or give the task to another agent.`, t.id);
+    }
+    for (const id of [...this.pinnedSince.keys()]) if (!seen.has(id)) {
+      this.pinnedSince.delete(id);
+      this.pinnedSaid.delete(id);
+    }
+  }
+
+  /** Why an open task pinned to an idle agent has not started, in words. */
+  private waitCause(t: Task, a: Agent): string {
+    const child = this.children.get(a.name);
+    if (child && this.runAlive(a.name)) return this.lingerWhy(a.name, child);
+    const d = this.deferred.get(a.name);
+    if (d && d.taskId !== t.id) return `${a.name} is set to continue #${d.taskId} first (${d.why})`;
+    if (d) return d.why;
+    if (this.quotaHold()) return 'the account is near or at its limit';
+    const block = this.startBlock();
+    if (block) return block;
+    const busy = t.paths.length ? this.store.all().find((o) => o.status === 'in_progress' && o.id !== t.id && o.paths.length && pathsClash(t.paths, o.paths)) : undefined;
+    if (busy) return `#${busy.id} is changing ${pathsClash(t.paths, busy.paths)}`;
+    return 'the task manager found no reason; it should start on the next tick';
   }
 
   private startDeferred(): void {
@@ -1568,8 +1714,14 @@ export class TaskManagerService {
       const t = this.store.get(d.taskId);
       const a = this.agent(name);
       // Moved on meanwhile (cancelled, reassigned, held, agent paused): assign() handles it the normal way.
-      if (!t || !a || t.status !== 'open' || t.hold || a.paused || a.state !== 'idle' || this.runAlive(name) || (t.agent && t.agent !== name)) {
+      if (!t || !a || t.status !== 'open' || t.hold || a.paused || a.state !== 'idle' || (t.agent && t.agent !== name)) {
         this.deferred.delete(name);
+        continue;
+      }
+      /** #2794: its previous run's process is still alive: keep waiting (reapLingering ends it), never drop the start. */
+      const child = this.children.get(name);
+      if (child && this.runAlive(name)) {
+        d.why = this.lingerWhy(name, child);
         continue;
       }
       const why = this.startBlock();
@@ -2010,7 +2162,11 @@ export class TaskManagerService {
       // A child that has already exited must not block the agent forever. The exit handler only
       // deletes the entry when the exiting child is the stored one; two quick dispatches can leave
       // a dead child in the map (11 Sep: friday-4 idle on the board, never given a task again).
-      if (running.exitCode === null && running.signalCode === null) return;
+      // #2794: and a live one never makes the start vanish: it waits, and says why on the task.
+      if (running.exitCode === null && running.signalCode === null) {
+        this.defer(t, a, message, this.lingerWhy(a.name, running));
+        return;
+      }
       this.children.delete(a.name);
     }
     // Too many working, too much script memory, or another run started moments ago: wait, message and all.
@@ -2071,7 +2227,8 @@ export class TaskManagerService {
     const adapter = agentAdapter(a.provider);
     let child: ChildProcess;
     try {
-      child = adapter.spawn({
+      if (serviceSeams.launch) child = serviceSeams.launch(a, t);
+      else child = adapter.spawn({
         provider: a.provider,
         profileHome: prof.home,
         cwd,
@@ -2213,6 +2370,14 @@ export class TaskManagerService {
         this.note(fresh, 'task manager', 'finding', `${a.name}'s run ended with an error (exit ${code}); see ${run.log}.`);
         this.inbox('failed', `${a.name}'s run on #${taskId} ${fresh.title} ended with an error (exit code ${code}). The task is back to open; check ${run.log}, then start it again or cancel it.`, taskId);
       }
+    } else if (this.deferred.get(agentName)?.taskId === taskId) {
+      // #2794: a message for this task waited for this process to end (sent back, answered, redirected): it goes next,
+      // in place of the nudge, so it is not lost.
+      run.exit = 'paused';
+      run.exitNote = 'ended; the message waiting for it goes next';
+      a.state = 'idle';
+      fresh.status = 'open';
+      fresh.dispatchRequested = true;
     } else if (a.nudges < 2) {
       // Ended its turn without reporting or asking: nudge once or twice, then give up.
       run.exit = 'paused';

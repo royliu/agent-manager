@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A run that reported but never exited no longer blocks its agent. On 20 Oct friday-6 reported #2783, but its process stayed alive; every start for friday-6 then returned without a word, and a task pinned to it sat open for 25 minutes while the board showed it idle. Now a run whose task has left it (reported, asked, sent back or closed) and whose process is still alive 90 seconds later is ended, together with everything under it (SIGTERM, then SIGKILL 10 seconds on), and the task's events say so. A start that finds the agent's old process still alive waits, says why on the task, and goes ahead once it has gone. A message sent while the old process was ending (a send-back, an answer) is no longer lost. A task pinned to an agent the board shows as idle that has not started after 5 minutes reaches the GM's inbox as stalled, naming why it waits. Check: `node --import tsx checks/linger.ts` (`BREAK=no_reap` must fail).
+
 ## 0.13.0 · 2026-10-20
 
 - One memory per project, shared by every profile. Each tool kept what it learned about a folder per profile, so the same project was learned several times over and the copies drifted: on one project `work` held 690 notes, `personal` 342 and `superclaude` 110, 370 of them the same note written twice and 56 the same name with different words. `am memory share <folder>` merges them into `~/.agent-manager/shared/projects/<project>/memory` and makes every profile's own folder a link to it; the tool follows the link for reading and for writing. Nothing is lost: every folder is copied to `~/.agent-manager/backups/memory-<when>/` first, two files with the same words become one, and when they differ the one changed most recently keeps the plain name — so a `[[link]]` inside another note still points somewhere — while the other is kept beside it as `<name>.from-<profile>.md`. The indexes are merged as a union, one line per file.
