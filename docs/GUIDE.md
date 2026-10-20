@@ -517,7 +517,34 @@ own sessions, their MCP servers, the task manager, the GM and anything the agent
 never stopped. The board's top line and `am status` show the figure (`mem 9.2/24 GB`), green under the
 hold line, yellow above it, red at the stop line or after a stop in the last ten minutes.
 
-## 12. Where things live
+## 12. One memory per project
+
+Each tool keeps what it has learned about a folder — one note per file, with an index that is loaded into every
+session. Until now each profile learned the same project separately, and the copies drifted: on one project `work`
+had 690 notes, `personal` 342 and `superclaude` 110, with hundreds of them the same note written twice.
+
+A project can have one memory instead, which every profile reads and writes:
+
+```
+am memory share ~/Projects/genie --dry-run   # what it would do: counts, what differs, how long the index would be
+am memory share ~/Projects/genie             # do it
+am memory status                             # every shared project: notes, index length, who is linked
+am memory unshare ~/Projects/genie           # give each profile its own copy back
+```
+
+Sharing never loses a note. Every folder it touches is copied to `~/.agent-manager/backups/memory-<when>/` first.
+Two files with the same name and the same words become one. When they differ, the one changed most recently keeps
+the plain name — so a `[[link]]` written inside another note still points somewhere — and the other is kept beside
+it as `<name>.from-<profile>.md`. The indexes are merged as a union, one line per file.
+
+After that, every profile's own folder is a link to `~/.agent-manager/shared/projects/<project>/memory`, and the
+tool follows it for reading and for writing. A profile that joins the project later — a new task agent, a GM opened
+on another account — is linked when it starts, and whatever it learned on its own is folded in first.
+
+`am memory unshare` gives each profile a full copy of the shared folder, so nothing written while sharing is lost;
+`--from-backup` puts back what each profile had just before the share instead. The shared folder is never deleted.
+
+## 13. Where things live
 
 ```
 ~/.agent-manager/
@@ -528,6 +555,8 @@ hold line, yellow above it, red at the stop line or after a stop in the last ten
   board.json                   board preferences (pane size, folds)
   cache/                       live-quota cache (no secrets)
   profiles/<tool>/<name>/      the isolated config directories
+  shared/projects/<project>/   one memory per project, when it is shared (am memory share)
+  backups/memory-<when>/       what each profile's memory folder held before a share
   swarms/<name>/
     tasks/                     one file per task: notes, questions, runs, report
     events.jsonl               the timeline
@@ -541,7 +570,7 @@ hold line, yellow above it, red at the stop line or after a stop in the last ten
 Credentials are never copied or logged. The only network calls `am` itself makes are the
 optional `--live` quota polls; everything else is read from local files.
 
-## 13. Updating `am`
+## 14. Updating `am`
 
 ```sh
 cd agent-manager && git pull && npm install && npm run build && npm install -g .
@@ -558,7 +587,7 @@ am gm                 # reopens Friday with the new instructions
 
 Friday's conversation and the agents' state survive this.
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 **The board says it cannot connect, or `am board` errors with a socket path.** The task
 manager died or a stale pid file is left over. `am gm stop <gm>` then `am board` starts a clean

@@ -19,6 +19,7 @@ import { tasksCommand } from './commands/tasks.js';
 import { taskCommand } from './commands/task.js';
 import { agentCommand } from './commands/agent.js';
 import { configCommand } from './commands/swarmconfig.js';
+import { memoryShareCommand, memoryStatusCommand, memoryUnshareCommand } from './commands/memory.js';
 import { serveCommand } from './commands/serve.js';
 import { runMcpBridge } from './swarm/mcp.js';
 import { hookCommand } from './swarm/hooks.js';
@@ -295,6 +296,40 @@ program
   .argument('[value]')
   .action(async (key, value) => {
     await configCommand(key, value);
+  });
+
+// ------------------------------------------------------------------ memory
+const memory = program
+  .command('memory')
+  .description('what the tools have learned about a project: am memory status · share <folder> [--dry-run] · unshare <folder>')
+  .action(() => {
+    memoryStatusCommand({});
+  });
+
+memory
+  .command('status')
+  .description('every project with one shared memory: how many notes, how long the index is, which profiles are linked')
+  .option('--json', 'machine-readable output')
+  .action((opts) => {
+    memoryStatusCommand(opts);
+  });
+
+memory
+  .command('share')
+  .description('give a project ONE memory that every profile reads and writes: merge what they each learned, then link them to it')
+  .argument('[folder]', 'the project folder (default: this one)')
+  .option('--dry-run', 'only say what it would do: counts, what differs, how long the index would be')
+  .action((folder, opts) => {
+    memoryShareCommand(folder, opts);
+  });
+
+memory
+  .command('unshare')
+  .description('give each profile its own copy back (nothing is deleted)')
+  .argument('[folder]', 'the project folder (default: this one)')
+  .option('--from-backup', 'put back what each profile had before the share, instead of a copy of the shared folder')
+  .action((folder, opts) => {
+    memoryUnshareCommand(folder, { fromBackup: opts.fromBackup });
   });
 
 // -------------------------------------------------------------------- shell

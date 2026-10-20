@@ -3,6 +3,7 @@ import type { Agent } from '../swarm/model.js';
 import { resolveSwarmName } from '../swarm/registry.js';
 import { bold, cyan, dim, green, padEnd, red, yellow } from '../ui/format.js';
 import { noSwarm } from './gm.js';
+import { linkMemoriesFor } from './memory.js';
 
 export async function agentCommand(sub: string, arg: string | undefined, opts: { gm?: string; profile?: string; model?: string; json?: boolean }): Promise<void> {
   const meta = resolveSwarmName(opts.gm);
@@ -26,6 +27,8 @@ export async function agentCommand(sub: string, arg: string | undefined, opts: {
       case 'add': {
         const a = await c.call<Agent>('team.add', { name: arg, profile: opts.profile, model: opts.model });
         console.log(`  ${green('✓')} ${a.name} added on ${a.profile}. ${dim(`${meta.name} can assign to it now.`)}`);
+        /** (#2791) A project with one shared memory: the new agent's profile joins it. */
+        linkMemoriesFor(meta.dir, [a.profile]);
         return;
       }
       case 'rm':
@@ -39,6 +42,7 @@ export async function agentCommand(sub: string, arg: string | undefined, opts: {
         if (!arg || !opts.profile) throw new Error('am agent move <name> --profile <profile>');
         const a = await c.call<Agent>('team.move', { name: arg, profile: opts.profile });
         console.log(`  ${green('✓')} ${a.name} now runs on ${a.profile}; its next task starts a fresh session there.`);
+        linkMemoriesFor(meta.dir, [a.profile]);
         return;
       }
       default:

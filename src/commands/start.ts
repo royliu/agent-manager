@@ -11,6 +11,7 @@ import { findSwarm, loadSwarmConfig, realDir, saveSwarm, swarmForDir, SWARM_NAME
 import { Store } from '../swarm/store.js';
 import { bold, cyan, dim, green, red } from '../ui/format.js';
 import { closePrompts } from '../ui/prompt.js';
+import { linkMemoriesFor } from './memory.js';
 import { resolveProfile } from './resolve.js';
 
 interface StartOptions {
@@ -198,6 +199,8 @@ export async function startCommand(profileName: string, nameArg: string | undefi
   const store = new Store(meta.name);
   const team = store.team();
   const ws = store.workspace();
+  /** (#2791) A project with one shared memory: the GM, the task manager and every task agent read and write it. */
+  linkMemoriesFor(dir, [profile.name, ...team.map((a) => a.profile)]);
   console.log(`  ${green('✓')} task manager and ${team.length} task agent${team.length === 1 ? '' : 's'} ${fresh ? 'ready' : 'back'}: ${team.map((a) => a.name).join(' ')} ${dim(`(${fresh ? 'idle' : 'as they were'}, ${profile.name})`)}`);
   console.log(`  ${green('✓')} models: ${modelsLines(models, meta.name).join(dim(' · '))}`);
   for (const note of [modelNameNote(models.gm.model), modelNameNote(models.tm.model), modelNameNote(models.agent.model)].filter((n, i, all): n is string => !!n && all.indexOf(n) === i)) console.log(`    ${dim(note)}`);

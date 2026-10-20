@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { linkMemoriesFor } from './memory.js';
 import fs from 'node:fs';
 import { profileByName } from '../core/config.js';
 import { runForeground } from '../core/exec.js';
@@ -32,6 +33,8 @@ export async function gmCommand(name: string | undefined): Promise<void> {
     return;
   }
   await ensureService(meta.name);
+  /** (#2791) A project with one shared memory: this session reads and writes it, like every other profile's. */
+  linkMemoriesFor(meta.dir, [meta.profile]);
   const cfg = loadSwarmConfig();
   const { spec, sessionId } = buildGmLaunch(meta, profile, cfg, { resume: !!meta.gmSessionId });
   if (sessionId) {
