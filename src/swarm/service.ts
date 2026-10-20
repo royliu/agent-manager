@@ -22,6 +22,7 @@ import { mergeRepeat, Store, writeJsonAtomic } from './store.js';
 import { readClaudeContextPct, readClaudeSession, type SessionStats } from './transcript.js';
 import { triageQuestion } from './triage.js';
 import { ago, describeUnit, gb, GB, macMemory, planStops, readPs, scriptUnits, type MemView, type Owner, type Proc, type ScriptUnit } from './memguard.js';
+import { withSharedMemory } from '../core/memory.js';
 
 type Params = Record<string, unknown>;
 const str = (p: Params, k: string, req = true): string => {
@@ -2233,7 +2234,16 @@ export class TaskManagerService {
         profileHome: prof.home,
         cwd,
         prompt,
-        systemPrompt: `You are ${a.name}, a task agent. Follow the task brief you were given. Use the task tools to ask, note, report and checkpoint; never end a task without reporting or asking.`,
+        /**
+         * #2793: a codex agent is told where the project's shared memory is, because its tool keeps none of its own.
+         * The PROJECT folder, not this agent's cwd: a task agent often works in a worktree, and the memory belongs to
+         * the project it was cut from — the same folder every profile was linked on.
+         */
+        systemPrompt: withSharedMemory(
+          `You are ${a.name}, a task agent. Follow the task brief you were given. Use the task tools to ask, note, report and checkpoint; never end a task without reporting or asking.`,
+          a.provider,
+          this.meta.dir,
+        ),
         // A fresh Codex launch ignores this value; keeping the placeholder local prevents it
         // from ever becoming continuation state. `learnSessionId` replaces it with Codex's real
         // thread id before any legitimate resume.

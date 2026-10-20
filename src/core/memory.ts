@@ -58,9 +58,44 @@ export function profileMemoryDir(profile: Profile, slug: string): string {
   return path.join(profile.home, 'projects', slug, 'memory');
 }
 
-/** Every profile whose tool keeps memory this way. Codex profiles join in #2793. */
+/** Every profile whose tool keeps memory this way: its folder becomes a link to the shared one. */
 export function memoryProfiles(): Profile[] {
   return loadConfig().profiles.filter((p) => p.provider === 'claude-code');
+}
+
+/** The profiles that get told where the shared folder is instead, because their tool keeps no memory of its own. */
+export function pointedProfiles(): Profile[] {
+  return loadConfig().profiles.filter((p) => p.provider === 'codex');
+}
+
+/**
+ * ═══ WHAT A CODEX AGENT IS TOLD (#2793) ═══
+ *
+ * Claude Code finds this folder by itself — it is where it keeps its own memory, and the index is loaded into every
+ * session. Codex has no such thing, so an agent on a codex profile is simply told, in its start instructions, where
+ * the folder is and how to read and write it. Null when the project has no shared memory, so a codex agent on an
+ * ordinary project carries nothing extra.
+ *
+ * It is deliberately five lines. It goes in front of EVERY start and resume on that profile, so anything longer is
+ * paid for again on every task.
+ */
+export function sharedMemoryNote(projectPath: string): string | null {
+  const dir = sharedMemoryDir(projectSlug(projectPath));
+  if (!fs.existsSync(dir)) return null;
+  return [
+    `This project keeps one memory, shared by every tool, in ${dir}.`,
+    'Read its MEMORY.md first: one line per note, with a link. Open the few notes that bear on your task.',
+    'Before you finish, if you learned something a later session would need and that folder does not already say it,',
+    'write <short-name>.md there with front matter — name, description, and metadata.type of user, feedback, project',
+    'or reference — and add ONE line to MEMORY.md: "- [Title](<short-name>.md) — a hook". Never change a note already there.',
+  ].join('\n');
+}
+
+/** The start instructions an agent is given, with that pointer added when its tool needs one. */
+export function withSharedMemory(systemPrompt: string, provider: string, projectPath: string): string {
+  if (provider !== 'codex') return systemPrompt;
+  const note = sharedMemoryNote(projectPath);
+  return note === null ? systemPrompt : `${systemPrompt}\n\n${note}`;
 }
 
 export type FolderState =

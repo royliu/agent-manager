@@ -544,6 +544,41 @@ on another account — is linked when it starts, and whatever it learned on its 
 `am memory unshare` gives each profile a full copy of the shared folder, so nothing written while sharing is lost;
 `--from-backup` puts back what each profile had just before the share instead. The shared folder is never deleted.
 
+### Keeping the index short
+
+The index is loaded whole into every session, so its length is paid for on every turn. Merged across three profiles
+genie's came to 768 lines. `am memory tidy` folds it under topic pages:
+
+```
+am memory tidy ~/Projects/genie --dry-run   # which topics, how many notes each, how long the index would be
+am memory tidy ~/Projects/genie             # do it
+```
+
+A topic page is an ordinary note — same folder, same front matter — whose body lists the notes it covers, and
+MEMORY.md carries one line for the page instead of one line per note. **No note is ever deleted or renamed**: tidying
+only adds pages and rewrites MEMORY.md, and it copies the whole folder to
+`~/.agent-manager/backups/memory-tidy-<when>/` first. Every note stays reachable from MEMORY.md within one hop, and
+the command reads the folder back afterwards and says so. On genie's merged memory it went from 768 lines to 180.
+
+Pages somebody wrote by hand are found and left exactly as they are; their notes simply come out of the index. What is
+left is grouped by the words the note names share — the word covering the most notes becomes a topic, and so on until
+the index fits. Nothing is forced: a note that shares no word with five others keeps its own line. To steer it, write
+`~/.agent-manager/shared/projects/<project>/memory-topics.json`:
+
+```json
+{
+  "topics": [{ "name": "Browser and screen lessons", "match": ["browser", "screen"], "notes": ["one-more-note.md"] }],
+  "ignore": ["this-note-keeps-its-own-line.md"]
+}
+```
+
+### Codex profiles
+
+Codex keeps no memory of its own, so there is no folder to link. An agent `am` starts on a codex profile is told, in
+five lines of its start instructions, where the shared folder is, to read MEMORY.md first, and how to add a note — the
+same front matter, plus one index line. A project with no shared memory adds nothing to the prompt. Claude Code
+profiles are told nothing extra: for them that folder IS their memory.
+
 ## 13. Where things live
 
 ```
@@ -556,7 +591,9 @@ on another account — is linked when it starts, and whatever it learned on its 
   cache/                       live-quota cache (no secrets)
   profiles/<tool>/<name>/      the isolated config directories
   shared/projects/<project>/   one memory per project, when it is shared (am memory share)
+                               memory-topics.json steers how am memory tidy groups it
   backups/memory-<when>/       what each profile's memory folder held before a share
+  backups/memory-tidy-<when>/  the whole shared folder as it stood before a tidy
   swarms/<name>/
     tasks/                     one file per task: notes, questions, runs, report
     events.jsonl               the timeline

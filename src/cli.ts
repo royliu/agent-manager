@@ -19,7 +19,7 @@ import { tasksCommand } from './commands/tasks.js';
 import { taskCommand } from './commands/task.js';
 import { agentCommand } from './commands/agent.js';
 import { configCommand } from './commands/swarmconfig.js';
-import { memoryShareCommand, memoryStatusCommand, memoryUnshareCommand } from './commands/memory.js';
+import { memoryShareCommand, memoryStatusCommand, memoryTidyCommand, memoryUnshareCommand } from './commands/memory.js';
 import { serveCommand } from './commands/serve.js';
 import { runMcpBridge } from './swarm/mcp.js';
 import { hookCommand } from './swarm/hooks.js';
@@ -301,7 +301,7 @@ program
 // ------------------------------------------------------------------ memory
 const memory = program
   .command('memory')
-  .description('what the tools have learned about a project: am memory status · share <folder> [--dry-run] · unshare <folder>')
+  .description('what the tools have learned about a project: am memory status · share <folder> [--dry-run] · tidy <folder> [--dry-run] · unshare <folder>')
   .action(() => {
     memoryStatusCommand({});
   });
@@ -321,6 +321,15 @@ memory
   .option('--dry-run', 'only say what it would do: counts, what differs, how long the index would be')
   .action((folder, opts) => {
     memoryShareCommand(folder, opts);
+  });
+
+memory
+  .command('tidy')
+  .description('fold a long index under topic pages, so every session does not load hundreds of lines (nothing is deleted or renamed)')
+  .argument('[folder]', 'the project folder (default: this one)')
+  .option('--dry-run', 'only say what it would do: which topics, how many notes each, how long the index would be')
+  .action((folder, opts) => {
+    memoryTidyCommand(folder, opts);
   });
 
 memory

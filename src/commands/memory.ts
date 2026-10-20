@@ -14,9 +14,12 @@ import {
   memoryStatus,
   newestBackup,
   planShare,
+  pointedProfiles,
+  projectSlug,
   unshare,
   type SharePlan,
 } from '../core/memory.js';
+import { FOLD_OVER, applyTidy, auditTidy, overridesFile, planTidy, snapshotNotes } from '../core/memorytidy.js';
 import { bold, cyan, dim, green, red, yellow } from '../ui/format.js';
 
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
@@ -108,6 +111,9 @@ export function memoryStatusCommand(opts: { json?: boolean } = {}): void {
         (warn ? `  ${yellow(`! over ${INDEX_LINES_WARN} lines — a lot for one session to hold`)}` : ''),
     );
     console.log(`    linked: ${r.linked.length > 0 ? green(r.linked.join(', ')) : dim('none')}`);
+    /** #2793: codex keeps no memory of its own, so those profiles are told where this folder is instead. */
+    const told = pointedProfiles().map((p) => p.name);
+    if (told.length > 0) console.log(`    told where it is: ${told.join(', ')} ${dim('(in the start instructions; their tool keeps no memory of its own)')}`);
     if (r.separate.length > 0) {
       for (const s of r.separate) {
         console.log(`    ${yellow('separate')}: ${s.profile} ${dim(`(${plural(s.notes, 'note')}, ${plural(s.indexLines, 'index line')})`)}`);
@@ -138,6 +144,59 @@ export function linkMemoriesFor(dir: string, profileNames: readonly string[]): v
   if (joined.length > 0) parts.push(`${joined.join(', ')} joined`);
   if (merged.length > 0) parts.push(`${merged.join(', ')} folded its own notes in first`);
   console.log(`  ${green('✓')} this project keeps one memory for every profile: ${parts.join('; ')}`);
+}
+
+/**
+ * `am memory tidy` — fold a long index under topic pages (#2793). Nothing is deleted and nothing is renamed: it only
+ * writes new pages and a shorter MEMORY.md, and it copies the folder first.
+ */
+export function memoryTidyCommand(projectPath: string | undefined, opts: { dryRun?: boolean } = {}): void {
+  const where = path.resolve(projectPath ?? process.cwd());
+  const dry = opts.dryRun === true;
+  const plan = planTidy(where);
+  console.log('');
+  console.log(`  ${bold(dry ? 'Would tidy' : 'Tidying')} the memory of ${bold(tildify(plan.projectPath))}`);
+  if (!fs.existsSync(plan.shared)) {
+    console.log(`  ${yellow('!')} this project has no shared memory yet — ${cyan(`am memory share ${tildify(where)} --dry-run`)}`);
+    console.log('');
+    return;
+  }
+  if (plan.alreadyShort) {
+    console.log(`  ${green('✓')} ${plural(plan.before, 'line')} in the index, not over ${FOLD_OVER} — nothing to fold`);
+    console.log('');
+    return;
+  }
+  console.log(`  ${plan.before} lines now → ${bold(String(plan.after))} after${plan.after > INDEX_LINES_WARN ? ` ${yellow(`— still over ${INDEX_LINES_WARN}`)}` : ''}`);
+  console.log('');
+  if (plan.kept.length > 0) {
+    console.log(`  ${bold('Pages the folder already had')} ${dim('(left exactly as they are)')}`);
+    for (const p of plan.kept) console.log(`    ${p.title.padEnd(42)} ${dim(`${plural(p.notes.length, 'note')}`)}`);
+    console.log('');
+  }
+  if (plan.made.length > 0) {
+    console.log(`  ${bold(dry ? 'Pages it would write' : 'Pages written')}`);
+    for (const t of plan.made) console.log(`    ${t.title.padEnd(42)} ${dim(`${plural(t.notes.length, 'note')} → ${t.file}`)}`);
+    console.log('');
+  }
+  console.log(`  ${plural(plan.loose.length, 'note')} keep a line of their own`);
+  if (plan.short !== null) console.log(`  ${yellow('!')} it stopped before the target: ${plan.short}`);
+  if (dry) {
+    console.log('');
+    console.log(`  ${dim('Nothing was changed. Run it again without --dry-run to do it.')}`);
+    console.log(`  ${dim(`To steer the grouping, write ${tildify(overridesFile(projectSlug(where)))}`)}`);
+    console.log('');
+    return;
+  }
+  const before = snapshotNotes(plan.shared);
+  const done = applyTidy(where);
+  const audit = auditTidy(plan.shared, before);
+  console.log('');
+  console.log(`  ${audit.ok ? green('✓') : red('✗')} every note still there, word for word, and reachable from the index within one hop`);
+  if (audit.lost.length > 0) console.log(`    ${red('lost or changed:')} ${audit.lost.slice(0, 5).join(', ')}`);
+  if (audit.unreachable.length > 0) console.log(`    ${red('nothing points at:')} ${audit.unreachable.slice(0, 5).join(', ')}`);
+  console.log(`  ${green('✓')} ${plural(audit.indexLines, 'line')} in the index now`);
+  if (done.backup !== null) console.log(`    the folder was copied to ${tildify(done.backup)} first`);
+  console.log('');
 }
 
 export function memoryUnshareCommand(projectPath: string | undefined, opts: { fromBackup?: boolean } = {}): void {
