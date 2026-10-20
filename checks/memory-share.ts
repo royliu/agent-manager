@@ -17,7 +17,7 @@ const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'am-memcheck-'));
 process.env.AGENT_MANAGER_HOME = HOME;
 
 const { memorySeams, planShare, applyShare, memoryStatus, unshare, ensureLinked, projectSlug, sharedMemoryDir, profileMemoryDir, INDEX_LINES_WARN, noteFiles, indexLinesOf } = await import('../src/core/memory.js');
-const { memoryStatusCommand } = await import('../src/commands/memory.js');
+const { memoryStatusCommand, linkMemoriesFor } = await import('../src/commands/memory.js');
 import type { Profile } from '../src/core/config.js';
 
 const BREAK = process.env.BREAK ?? '';
@@ -165,6 +165,23 @@ check(old.restored.some((r) => r.profile === 'beta' && r.from === 'backup')
   'unshare --from-backup: beta gets back exactly what it had just before the share, not what was learned after',
   JSON.stringify(old.restored.map((r) => `${r.profile}:${r.from}`)));
 check(fs.existsSync(path.join(shared, 'after-the-share.md')), 'and what was learned while sharing stays in the shared folder');
+
+/* ═══ I: what a GM start, an agent added and a GM reopened all call ═══ */
+const quiet: string[] = [];
+const sayNothing = console.log;
+console.log = (...args: unknown[]): void => { quiet.push(args.map(String).join(' ')); };
+const elsewhere = path.join(HOME, 'work', 'another-project');
+fs.mkdirSync(elsewhere, { recursive: true });
+linkMemoriesFor(elsewhere, ['alpha', 'beta']);
+const saidNothing = quiet.length === 0;
+applyShare(PROJECT, [A]);
+quiet.length = 0;
+linkMemoriesFor(PROJECT, ['beta', 'gamma']);
+console.log = sayNothing;
+check(saidNothing, 'a project with no shared memory is left alone, and says nothing');
+check(fs.lstatSync(profileMemoryDir(B, slug)).isSymbolicLink() && fs.lstatSync(profileMemoryDir(C, slug)).isSymbolicLink()
+  && quiet.some((l) => l.includes('one memory for every profile')),
+  'the profiles a GM or a new agent runs on join the shared memory when it starts', quiet.join(' | ').slice(0, 120));
 
 console.log(failed === 0 ? `\nALL ${all} PASS` : `\n${failed} of ${all} FAIL`);
 fs.rmSync(HOME, { recursive: true, force: true });
