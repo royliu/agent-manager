@@ -27,10 +27,12 @@ export const INDEX_LINES_WARN = 200;
 
 /**
  * checks/memory-share.ts's deliberate faults; empty in the app.
- *   drop_older  a note that differs between profiles keeps only the newest copy, so the other profile's words are lost
- *   no_backup   the folders are swapped for links without being copied anywhere first
+ *   drop_older     a note that differs between profiles keeps only the newest copy, so the other profile's words are lost
+ *   no_backup      the folders are swapped for links without being copied anywhere first
+ *   latest_backup  undoing reaches for the newest backup of any shape, so a tidy's copy of the shared folder shadows
+ *                  the share's own copy of each profile's folder
  */
-export const memorySeams = { breakFor: '' as '' | 'drop_older' | 'no_backup' };
+export const memorySeams = { breakFor: '' as '' | 'drop_older' | 'no_backup' | 'latest_backup' };
 
 /**
  * Claude Code's own folder name for a project: the real path with every slash as a dash. It is the REAL path that
@@ -516,7 +518,12 @@ export function unshare(projectPath: string, opts: { fromBackup?: boolean } = {}
   return { slug, restored };
 }
 
-/** The most recent backup that holds this project, if any. */
+/**
+ * The most recent backup of the profiles' OWN folders for this project, if any — one folder per profile, as a share
+ * leaves behind. `am memory tidy` also backs this project up (memory-tidy-<when>), but that is a copy of the shared
+ * folder with the notes directly in it; restoring from that would quietly hand every profile the same shared copy
+ * instead of what it had before the share, so a tidy must not shadow the share it followed.
+ */
 export function newestBackup(slug: string): string | null {
   let names: string[] = [];
   try {
@@ -531,7 +538,18 @@ export function newestBackup(slug: string): string | null {
   }
   for (const name of names) {
     const dir = path.join(BACKUPS_ROOT, name, slug);
-    if (fs.existsSync(dir)) return dir;
+    if (!fs.existsSync(dir)) continue;
+    if (memorySeams.breakFor !== 'latest_backup' && !holdsProfileFolders(dir)) continue;
+    return dir;
   }
   return null;
+}
+
+/** A share's backup: a folder for each profile it copied. Anything flat is a copy of the shared folder, not that. */
+function holdsProfileFolders(dir: string): boolean {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true }).some((e) => e.isDirectory());
+  } catch {
+    return false;
+  }
 }

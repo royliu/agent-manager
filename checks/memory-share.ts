@@ -8,6 +8,9 @@
  *   node --import tsx checks/memory-share.ts                   all PASS
  *   BREAK=drop_older node --import tsx checks/memory-share.ts  must FAIL: the older copy of a note that differs is lost
  *   BREAK=no_backup  node --import tsx checks/memory-share.ts  must FAIL: folders are swapped for links with no copy kept
+ *   BREAK=latest_backup node --import tsx checks/memory-share.ts  must FAIL: undoing takes the newest backup of any
+ *                                                                 shape, so a later tidy's copy of the shared folder
+ *                                                                 is handed to every profile as its own
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,7 +24,7 @@ const { memoryStatusCommand, linkMemoriesFor } = await import('../src/commands/m
 import type { Profile } from '../src/core/config.js';
 
 const BREAK = process.env.BREAK ?? '';
-if (BREAK === 'drop_older' || BREAK === 'no_backup') memorySeams.breakFor = BREAK;
+if (BREAK === 'drop_older' || BREAK === 'no_backup' || BREAK === 'latest_backup') memorySeams.breakFor = BREAK;
 
 let failed = 0;
 let all = 0;
@@ -174,6 +177,24 @@ check(old.restored.some((r) => r.profile === 'beta' && r.from === 'backup')
   'unshare --from-backup: beta gets back exactly what it had just before the share, not what was learned after',
   JSON.stringify(old.restored.map((r) => `${r.profile}:${r.from}`)));
 check(fs.existsSync(path.join(shared, 'after-the-share.md')), 'and what was learned while sharing stays in the shared folder');
+
+/* ═══ H2: a tidy afterwards does not shadow the share's own backup ═══ */
+/** One note only beta has, so a restored folder says plainly whose copy it is. */
+write(B, 'beta-alone.md', note('beta-alone', 'Only beta ever knew this.'), NOW - 1_000);
+applyShare(PROJECT, [A, B, C]);
+/** What `am memory tidy` leaves behind: a copy of the shared folder, notes directly in it, under a later name. */
+const tidyBackup = path.join(HOME, 'backups', `memory-tidy-${new Date(NOW + 3_600_000).toISOString().replace(/[:.]/g, '-')}`, slug);
+fs.mkdirSync(tidyBackup, { recursive: true });
+fs.cpSync(shared, tidyBackup, { recursive: true, dereference: true });
+fs.writeFileSync(path.join(shared, 'after-the-tidy.md'), note('after-the-tidy', 'Learned after the folder was tidied.'));
+const afterTidy = unshare(PROJECT, { fromBackup: true }, [A, B, C]);
+const betaNotes = noteFiles(profileMemoryDir(B, slug));
+const alphaNotes = noteFiles(profileMemoryDir(A, slug));
+check(afterTidy.restored.every((r) => r.from === 'backup')
+  && betaNotes.includes('beta-alone.md') && !betaNotes.includes('after-the-tidy.md')
+  && !alphaNotes.includes('beta-alone.md'),
+  'unshare --from-backup reaches past a later tidy to what each profile itself had',
+  JSON.stringify(afterTidy.restored.map((r) => `${r.profile}:${r.from}:${r.notes}`)));
 
 /* ═══ I: what a GM start, an agent added and a GM reopened all call ═══ */
 const quiet: string[] = [];
