@@ -30,6 +30,13 @@ const check = (ok: boolean, what: string, detail = ''): void => {
   if (!ok) failed += 1;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}${detail ? `  (${detail})` : ''}`);
 };
+const readOrEmpty = (file: string): string => {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+};
 
 /* ═══ a throwaway home: three profiles and one project ═══ */
 const PROJECT = path.join(HOME, 'work', 'my-project');
@@ -107,7 +114,9 @@ for (const p of [A, B]) {
 }
 check(done.backup !== null && fs.existsSync(path.join(done.backup!, 'alpha', 'drifted.md')) && fs.existsSync(path.join(done.backup!, 'beta', 'drifted.md')),
   'every folder it touched was copied first, both profiles', done.backup ?? 'no backup');
-check(fs.readFileSync(path.join(done.backup!, 'beta', 'drifted.md'), 'utf8').includes('The port is 4536.'),
+/** Read through a backup that may not be there, so the fault above reports a FAIL instead of ending the run. */
+const backedUpBeta = done.backup === null ? '' : readOrEmpty(path.join(done.backup, 'beta', 'drifted.md'));
+check(backedUpBeta.includes('The port is 4536.'),
   'the copy holds what that profile had, word for word');
 
 /* ═══ C: a session on either profile sees one folder ═══ */

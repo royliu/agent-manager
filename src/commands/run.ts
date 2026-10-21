@@ -3,6 +3,7 @@ import { runForeground } from '../core/exec.js';
 import { getProvider, readIdentitySafe } from '../providers/index.js';
 import { closePrompts } from '../ui/prompt.js';
 import { bold, red, yellow } from '../ui/format.js';
+import { linkMemoriesFor } from './memory.js';
 import { resolveActiveProfile, resolveProfile } from './resolve.js';
 
 interface RunOptions {
@@ -42,6 +43,9 @@ export async function runCommand(
     );
     console.error('');
   }
+
+  /** #2791: opened by hand in a project that keeps one memory, this profile joins it instead of starting a copy. */
+  linkMemoriesFor(process.cwd(), [profile.name]);
 
   // The child takes over the terminal; nothing of ours may still hold stdin.
   closePrompts();
