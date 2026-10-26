@@ -131,6 +131,43 @@ const MAX_UNSENT_BYTES = 64 * 1024 * 1024;
 /** A subscriber this far behind misses pushes; it re-reads the board when it catches up. */
 const PUSH_SKIP_BYTES = 1024 * 1024;
 
+/** Longest text a board copy carries in one field; the whole text stays in the store and in task show. */
+const BOARD_TEXT_MAX = 2000;
+/** Notes and activity lines a board copy carries per task: the board draws the newest six notes. */
+const BOARD_NOTES_MAX = 6;
+const BOARD_ACTIVITY_MAX = 5;
+
+/** The same for a done or cancelled task. */
+const BOARD_CLOSED_TEXT_MAX = 300;
+
+/**
+ * A task as the board draws it. A snapshot of every task with every note grew past MAX_UNSENT_BYTES
+ * on a board of ~3,000 tasks (26 Oct 2026: the board was dropped every two seconds and drew nothing),
+ * so the copy keeps the newest notes and activity and clips long texts. Nothing in the store changes.
+ */
+export function boardTask(t: Task): Task {
+  // A closed task is a row on the board and rarely opened: keep its last note and run and short texts.
+  const closed = t.status === 'done' || t.status === 'cancelled';
+  const max = closed ? BOARD_CLOSED_TEXT_MAX : BOARD_TEXT_MAX;
+  const c = (s: string): string => (s.length > max ? `${s.slice(0, max)}…` : s);
+  return {
+    ...t,
+    description: c(t.description),
+    ask: t.ask === undefined ? undefined : c(t.ask),
+    notes: t.notes.slice(closed ? -1 : -BOARD_NOTES_MAX).map((n) => ({ ...n, text: c(n.text) })),
+    questions: closed ? [] : t.questions,
+    runs: closed ? t.runs.slice(-1) : t.runs,
+    activity: closed ? [] : t.activity.slice(0, BOARD_ACTIVITY_MAX).map((a) => ({ ...a, text: c(a.text) })),
+    report: t.report && {
+      ...t.report,
+      changed: c(t.report.changed),
+      verified: c(t.report.verified),
+      left: c(t.report.left),
+      ...(t.report.watch === undefined ? {} : { watch: c(t.report.watch) }),
+    },
+  };
+}
+
 /** A task's file list, tidied: no leading "./", no empty entries, at most 40 paths. */
 export function readPaths(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
@@ -648,7 +685,7 @@ export class TaskManagerService {
       models: this.models(),
       workspace: this.store.workspace(),
       team: team.map((a) => ({ ...a, effectiveModel: this.effectiveModel(a) })),
-      tasks,
+      tasks: tasks.map(boardTask),
       inboxUnread: this.store.inbox().filter((i) => !i.read).length,
       needYou: tasks.filter(needsYou).length,
       quota: this.quotaCache?.value,
