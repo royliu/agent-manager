@@ -96,7 +96,8 @@ export async function hookCommand(kind: 'inbox' | 'stop' | 'status' | 'compact',
       const tool = typeof input.tool_name === 'string' ? input.tool_name : '';
       if (ALWAYS_ALLOWED.test(tool)) return;
       const notice = await c.call<string | null>('agent.notice', { agent });
-      if (notice && /your context is at/.test(notice)) {
+      // Over the context line, or moving off a nearly spent profile: either way the checkpoint comes first.
+      if (notice && /your context is at|so you are moving to the/.test(notice)) {
         process.stderr.write(`${notice} (This ${tool || 'tool'} call was not run.)\n`);
         process.exitCode = 2;
       }
