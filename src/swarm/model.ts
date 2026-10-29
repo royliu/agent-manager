@@ -205,6 +205,10 @@ export const SwarmMetaSchema = z.object({
   /** Profiles set for this GM only: the profile new task agents are created on (am gm start --agent-profile). */
   profiles: z.object({
     agents: z.string().optional(),
+    /** The task manager's own profile, when it should not share the GM's (owner, 28 Oct: the GM's week was nearly spent). */
+    tm: z.string().optional(),
+    /** The profile the stored task manager session belongs to: a session cannot be carried to another account. */
+    tmSessionOn: z.string().optional(),
   }).optional(),
 });
 export type SwarmMeta = z.infer<typeof SwarmMetaSchema>;

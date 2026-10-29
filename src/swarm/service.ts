@@ -960,8 +960,15 @@ export class TaskManagerService {
         .slice(0, 15);
       const asks = all.filter((x) => x.ask && isActive(x)).map((x) => ({ taskId: x.id, ask: x.ask! })).slice(-10);
       const activeTasks = all.filter(isActive).map((x) => ({ id: x.id, title: x.title, status: statusLabel(x, this.gm()), agent: x.agent }));
-      const tmModel = resolveModel('tm', this.meta, this.cfg, this.profile);
-      const r = await triageQuestion(this.profile.home, modelArg(tmModel), this.cfg.triage, {
+      const tmProfile = (this.meta.profiles?.tm ? profileByName(this.meta.profiles.tm) : undefined) ?? this.profile;
+      /** A session started on another account cannot be resumed here, so a moved task manager starts fresh. */
+      if ((this.meta.profiles?.tmSessionOn ?? this.profile.name) !== tmProfile.name) {
+        this.meta.tmSessionId = undefined;
+        this.meta.profiles = { ...this.meta.profiles, tmSessionOn: tmProfile.name };
+        this.store.saveMeta(this.meta);
+      }
+      const tmModel = resolveModel('tm', this.meta, this.cfg, tmProfile);
+      const r = await triageQuestion(tmProfile.home, modelArg(tmModel), this.cfg.triage, {
         task: t,
         root: this.root(t),
         parent: t.parentId !== undefined ? this.store.get(t.parentId) : undefined,
