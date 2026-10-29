@@ -128,8 +128,12 @@ function parseWindows(payload: unknown): Window[] {
             : undefined;
     if (raw === undefined) continue;
 
-    // Some fields report 0–1, others 0–100.
-    const usedPercent = raw <= 1 ? raw * 100 : raw;
+    /**
+     * `utilization` is already a percentage (0–100): a window at 1% sends 1, which the old "≤ 1 means a fraction"
+     * guess read as 100%, so a fresh profile looked spent (work, 28 Oct: 1% read as 100%). Only the other names are
+     * still read as a fraction when at or under 1.
+     */
+    const usedPercent = typeof v.utilization === 'number' || raw > 1 ? raw : raw * 100;
     const resetsRaw = v.resets_at ?? v.reset_at ?? v.resets_at_utc;
     let resetsAt: number | undefined;
     if (typeof resetsRaw === 'number') resetsAt = resetsRaw > 1e12 ? resetsRaw : resetsRaw * 1000;
