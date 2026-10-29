@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { CACHE_DIR, ensureDir } from '../core/paths.js';
 import type { Profile } from '../core/config.js';
@@ -68,11 +69,19 @@ async function readAccessToken(profile: Profile): Promise<string | undefined> {
   })();
   if (fromFile) return fromFile;
 
-  if (process.platform !== 'darwin' || profile.managed) return undefined;
+  if (process.platform !== 'darwin') return undefined;
+  /**
+   * A relocated install (CLAUDE_CONFIG_DIR, as every managed profile is) keeps its login under its own Keychain entry:
+   * the service name plus the first 8 hex of the config folder's SHA-256. Skipping managed profiles left every one of
+   * them at "could not read this profile's login", so the quota watch and the auto-switch saw no usage at all.
+   */
+  const service = profile.managed
+    ? `${KEYCHAIN_SERVICE}-${createHash('sha256').update(profile.home).digest('hex').slice(0, 8)}`
+    : KEYCHAIN_SERVICE;
   try {
     const { stdout } = await pexec(
       'security',
-      ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', os.userInfo().username, '-w'],
+      ['find-generic-password', '-s', service, '-a', os.userInfo().username, '-w'],
       { timeout: 5000 },
     );
     const parsed = JSON.parse(stdout.trim()) as { claudeAiOauth?: { accessToken?: string } };
@@ -119,8 +128,12 @@ function parseWindows(payload: unknown): Window[] {
             : undefined;
     if (raw === undefined) continue;
 
-    // Some fields report 0–1, others 0–100.
-    const usedPercent = raw <= 1 ? raw * 100 : raw;
+    /**
+     * `utilization` is already a percentage (0–100): a window at 1% sends 1, which the old "≤ 1 means a fraction"
+     * guess read as 100%, so a fresh profile looked spent (work, 28 Oct: 1% read as 100%). Only the other names are
+     * still read as a fraction when at or under 1.
+     */
+    const usedPercent = typeof v.utilization === 'number' || raw > 1 ? raw : raw * 100;
     const resetsRaw = v.resets_at ?? v.reset_at ?? v.resets_at_utc;
     let resetsAt: number | undefined;
     if (typeof resetsRaw === 'number') resetsAt = resetsRaw > 1e12 ? resetsRaw : resetsRaw * 1000;

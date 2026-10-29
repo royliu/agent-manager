@@ -147,6 +147,11 @@ export const AgentSchema = z.object({
   usdToday: z.number().default(0),
   /** A workspace change that arrived while this agent's run was going; handed over once, in its next tool result. */
   workspaceNotice: z.string().optional(),
+  /** Its profile is nearly spent: the profile it moves to once this run ends (after its checkpoint, or forced). */
+  switchTo: z.string().optional(),
+  /** When it was asked for that checkpoint, and why it is moving, in words for its notice and its task's note. */
+  switchAskedAt: z.number().optional(),
+  switchWhy: z.string().optional(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
 
@@ -232,6 +237,8 @@ export const SwarmConfigSchema = z.object({
   budgetUsd: z.number().optional(),
   quotaWarnAt: z.number().default(80),
   quotaHoldAt: z.number().default(95),
+  /** Quota % (shortest or weekly window) at which task agents move to another logged-in Claude Code profile. 0 = never. */
+  autoSwitchAt: z.number().min(0).max(100).default(95),
   /** Task agents working at once on this GM. Auto-start does not start more; the next waits for a free slot. */
   maxWorking: z.number().int().min(1).max(64).default(4),
   /** GB of memory the agents' scripts may hold before no new agent run starts. */

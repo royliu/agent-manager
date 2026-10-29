@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { profileByName, type Profile } from '../core/config.js';
-import { takeSnapshot } from '../core/snapshot.js';
+import { takeSnapshot, type ProfileSnapshot } from '../core/snapshot.js';
+import { readHarness } from '../core/harness.js';
 import { agentAdapter } from './agents/index.js';
 import { amEntry } from './client.js';
 import {
@@ -22,7 +23,9 @@ import { mergeRepeat, Store, writeJsonAtomic } from './store.js';
 import { readClaudeContextPct, readClaudeSession, type SessionStats } from './transcript.js';
 import { triageQuestion } from './triage.js';
 import { ago, describeUnit, gb, GB, macMemory, planStops, readPs, scriptUnits, type MemView, type Owner, type Proc, type ScriptUnit } from './memguard.js';
-import { withSharedMemory } from '../core/memory.js';
+import { applyShare, ensureLinked, withSharedMemory } from '../core/memory.js';
+import { chooseTarget, peakWindow, resetOf, SWITCH_CHECKPOINT_WAIT_MS, SWITCH_HARD_LINE, watchedWindows, type ProfileUsage } from './autoswitch.js';
+import type { Window } from '../providers/types.js';
 
 type Params = Record<string, unknown>;
 const str = (p: Params, k: string, req = true): string => {
@@ -259,9 +262,10 @@ export function limitFromLog(file: string): { until: number; said: string } | nu
 export const LINGER_GRACE_MS = 90_000;
 export const LINGER_KILL_MS = 10_000;
 export const PINNED_STALL_MS = 5 * 60_000;
-/** The narrow check's seams (checks/linger.ts): a stand-in for launching an agent, and the deliberate fault "no_reap"
- *  (a run that never exits is never ended). Never set in the task manager itself. */
-export const serviceSeams = { breakFor: '' as '' | 'no_reap', launch: null as null | ((a: Agent, t: Task) => ChildProcess) };
+/** The narrow checks' seams (checks/linger.ts, checks/autoswitch.ts): a stand-in for launching an agent, and the
+ *  deliberate faults "no_reap" (a run that never exits is never ended) and "flap" (agents leave a profile again and
+ *  again in the same window). Never set in the task manager itself. */
+export const serviceSeams = { breakFor: '' as '' | 'no_reap' | 'flap', launch: null as null | ((a: Agent, t: Task) => ChildProcess) };
 
 export class TaskManagerService {
   readonly store: Store;
@@ -275,6 +279,14 @@ export class TaskManagerService {
   private quotaCache?: { at: number; value: BoardSnapshot['quota'] };
   private quotaWarnedAt = 0;
   private stopping = false;
+  /** Every Claude Code profile's subscription, from the same live poll as the GM's quota. */
+  private usage = new Map<string, ProfileUsage>();
+  /** Profile → until when the agents keep off it: they left it this window, so it is neither left again nor gone back to. */
+  private switchedFrom = new Map<string, number>();
+  /** Moves under way, by the profile being left: where to, why, and who has moved so far (for the GM's last word). */
+  private switches = new Map<string, { to: string; why: string; moved: string[]; asked: string[] }>();
+  /** The window a "no profile can take them" note was already sent for, by profile. */
+  private noTargetSaid = new Map<string, number>();
 
   constructor(readonly name: string) {
     this.store = new Store(name);
@@ -285,6 +297,12 @@ export class TaskManagerService {
     const profile = profileByName(meta.profile);
     if (!profile) throw new Error(`profile "${meta.profile}" is gone`);
     this.profile = profile;
+    try {
+      const left = JSON.parse(fs.readFileSync(this.switchedFile(), 'utf8')) as Record<string, number>;
+      this.switchedFrom = new Map(Object.entries(left).filter(([, until]) => typeof until === 'number'));
+    } catch {
+      /* never switched */
+    }
   }
 
   // ---------------------------------------------------------------- lifecycle
@@ -1252,6 +1270,9 @@ export class TaskManagerService {
   private notice(agent: string, answers = false): string | null {
     const a = this.agent(agent);
     if (!a) return null;
+    if (a.switchTo && !a.rotateSession) {
+      return `Notice from the task manager: ${a.switchWhy ?? `the ${a.profile} profile is nearly spent`}, so you are moving to the ${a.switchTo} profile. Write a checkpoint now (task_checkpoint): what is done, what is next, and where your files are (folder, branch, worktree, anything not yet committed). Refresh your project memory (memory_update) if the next session needs something you learned, then end your reply. The task continues on ${a.switchTo} from your checkpoint.`;
+    }
     if (a.compactRequestedAt && !a.rotateSession) {
       return `Notice from the task manager: your context is at ${a.contextPct}%, over the ${this.cfg.compactAt}% line. Write a checkpoint now (task_checkpoint: what is done, what is left, the next step, decisions and why), refresh your project memory (memory_update), then end your reply. You will be continued with a fresh context.`;
     }
@@ -1334,21 +1355,26 @@ export class TaskManagerService {
     return true;
   }
 
-  private moveAgent(name: string, profileName: string): Agent {
+  private moveAgent(name: string, profileName: string, by = 'you'): Agent {
     const a = this.agent(name);
     if (!a) throw new RpcError(`no agent ${name}`);
     const prof = profileByName(profileName);
     if (!prof) throw new RpcError(`no profile ${profileName}`);
     if (prof.provider !== 'claude-code' && prof.provider !== 'codex') throw new RpcError(`profile ${prof.name} is ${prof.provider}`);
     if (a.state === 'working' || a.state === 'compacting') throw new RpcError(`${name} is working on #${a.taskId}; wait for it to pause or finish`);
-    a.profile = prof.name;
-    a.provider = prof.provider;
-    a.sessionId = undefined;
-    a.sessionCwd = undefined;
+    this.setProfile(a, prof);
     this.saveAgent(a);
-    this.event('you', `agent ${name} moved to profile ${prof.name}`);
+    this.event(by, `agent ${name} moved to profile ${prof.name}`);
     this.push({ event: 'team' });
     return a;
+  }
+
+  /** An agent's next run starts a fresh session on this profile: a session cannot be carried from one account to another. */
+  private setProfile(a: Agent, prof: Profile): void {
+    a.profile = prof.name;
+    a.provider = prof.provider as Agent['provider'];
+    a.sessionId = undefined;
+    a.sessionCwd = undefined;
   }
 
   private pauseAll(resume: boolean): Agent[] {
@@ -1424,6 +1450,7 @@ export class TaskManagerService {
     if (this.stopping) return;
     try {
       await this.refreshQuota();
+      this.autoSwitch();
       this.guardMemory();
       this.watch();
       this.reapLingering();
@@ -1435,12 +1462,27 @@ export class TaskManagerService {
     }
   }
 
+  /**
+   * Every profile of the GM's tool, and with auto-switch on every Claude Code profile too, with live quota. Claude
+   * Code keeps no local quota cache, so the provider is asked (cached 5 min per profile, backs off on 429).
+   */
+  private async liveProfiles(): Promise<ProfileSnapshot[]> {
+    const snap = await takeSnapshot({ provider: this.profile.provider, live: true });
+    if (this.profile.provider === 'claude-code' || this.cfg.autoSwitchAt <= 0) return snap.profiles;
+    return [...snap.profiles, ...(await takeSnapshot({ provider: 'claude-code', live: true })).profiles];
+  }
+
   private async refreshQuota(): Promise<void> {
     if (this.quotaCache && this.now() - this.quotaCache.at < 60_000) return;
     try {
-      // Claude Code keeps no local quota cache, so ask the provider (cached 5 min, backs off on 429).
-      const snap = await takeSnapshot({ provider: this.profile.provider, live: true });
-      const mine = snap.profiles.find((p) => p.profile.name === this.profile.name);
+      const profiles = await this.liveProfiles();
+      this.usage = new Map(profiles.filter((p) => p.profile.provider === 'claude-code').map((p) => [p.profile.name, {
+        profile: p.profile.name,
+        loggedIn: p.identity.loggedIn,
+        metered: readHarness(p.profile.provider, p.profile.home).backend === 'openrouter',
+        windows: p.usage.windows,
+      }]));
+      const mine = profiles.find((p) => p.profile.name === this.profile.name);
       const win = mine?.usage.windows.slice().sort((a, b) => a.windowMinutes - b.windowMinutes)[0];
       this.quotaCache = {
         at: this.now(),
@@ -1457,15 +1499,27 @@ export class TaskManagerService {
     }
   }
 
-  /** Until when the account's own limit stops every run, from the words of the run that hit it. */
-  private limitUntil = 0;
+  /** Profile → until when its account's own limit stops every run on it, from the words of the run that hit it. */
+  private limitUntil = new Map<string, number>();
   /** The reset this was already said about, so the owner hears it once per window. */
   private limitSaidFor = 0;
 
-  private quotaHold(): boolean {
-    if (this.limitUntil > this.now()) return true;
+  /** The shortest window of a profile: what limits.quota-hold reads. From the live poll, else the GM's own quota. */
+  private shortestWindow(profile: string): Window | undefined {
+    const u = this.usage.get(profile);
+    if (u?.windows.length) return u.windows.slice().sort((a, b) => a.windowMinutes - b.windowMinutes)[0];
     const q = this.quotaCache?.value;
-    return !!q && q.usedPercent >= this.cfg.quotaHoldAt;
+    return q && q.profile === profile && q.usedPercent >= 0 ? { usedPercent: q.usedPercent, resetsAt: q.resetsAt, windowMinutes: 0, label: q.label } : undefined;
+  }
+
+  /**
+   * No new run starts on this profile: its limit was hit, or it is past limits.quota-hold. Per profile, so agents an
+   * auto-switch moved off a spent profile start on their new one even when the GM's own profile is the spent one.
+   */
+  private quotaHoldFor(profile: string): boolean {
+    if ((this.limitUntil.get(profile) ?? 0) > this.now()) return true;
+    const w = this.shortestWindow(profile);
+    return !!w && w.usedPercent >= this.cfg.quotaHoldAt;
   }
 
   /** What the manager has already said about a file clash, so it says it once per pairing. */
@@ -1475,14 +1529,17 @@ export class TaskManagerService {
     const team = this.store.team();
     /** #2794: an agent the board shows idle whose last run's process is still alive is not free yet. */
     const lingering = new Set(team.filter((a) => a.state === 'idle' && !a.paused && this.runAlive(a.name)).map((a) => a.name));
-    const idle = team.filter((a) => a.state === 'idle' && !a.paused && !this.deferred.has(a.name) && !lingering.has(a.name));
+    const free = team.filter((a) => a.state === 'idle' && !a.paused && !this.deferred.has(a.name) && !lingering.has(a.name));
+    /** Free agents whose profile is spent or at its limit: nothing starts on them until it resets. */
+    const held = free.filter((a) => this.quotaHoldFor(a.profile));
+    const idle = free.filter((a) => !held.includes(a));
     for (const t of this.store.all()) {
       if (t.status !== 'open' || t.hold || !t.dispatchRequested || !t.agent || !lingering.has(t.agent) || this.deferred.has(t.agent) || this.unmetDeps(t).length) continue;
       const a = this.agent(t.agent);
       const child = this.children.get(t.agent);
       if (a && child) this.defer(t, a, undefined, this.lingerWhy(a.name, child));
     }
-    if (!idle.length) return;
+    if (!idle.length && !held.length) return;
     // What a free agent may pick up: tasks someone started, and, with autostart, any open task that is not
     // parked on hold and not waiting on another task. Most urgent first: priority, then ETA, then age.
     const all = this.store.all();
@@ -1497,10 +1554,11 @@ export class TaskManagerService {
       return [...new Set(names)].reverse();
     };
     for (const t of queued) {
-      if (this.quotaHold()) {
+      const heldOn = t.agent ? held.find((a) => a.name === t.agent)?.profile : idle.length ? undefined : held[0]?.profile;
+      if (heldOn) {
         if (t.status === 'open') {
           t.status = 'blocked';
-          t.blockedOn = { kind: 'quota', profile: this.profile.name, resetsAt: this.quotaCache?.value?.resetsAt };
+          t.blockedOn = { kind: 'quota', profile: heldOn, resetsAt: Math.max(this.limitUntil.get(heldOn) ?? 0, this.shortestWindow(heldOn)?.resetsAt ?? 0) || undefined };
           t.resumeTo = 'open';
           this.store.save(t);
           this.changed(t.id);
@@ -1527,10 +1585,10 @@ export class TaskManagerService {
         }
         continue;
       }
-      const free = idle.filter((a) => !queued.some((o) => o.agent === a.name && o.id !== t.id));
+      const unpinned = idle.filter((a) => !queued.some((o) => o.agent === a.name && o.id !== t.id));
       let agent = t.agent
         ? idle.find((a) => a.name === t.agent)
-        : familiar(t).map((n) => free.find((a) => a.name === n)).find(Boolean) ?? free[0] ?? idle[0];
+        : familiar(t).map((n) => unpinned.find((a) => a.name === n)).find(Boolean) ?? unpinned[0] ?? idle[0];
       if (!agent) continue;
       if (t.agent && agent.name !== t.agent) continue;
       idle.splice(idle.indexOf(agent), 1);
@@ -1550,20 +1608,232 @@ export class TaskManagerService {
 
   /** Quota freed up: release held tasks. */
   private releaseQuota(): void {
-    if (this.limitUntil && this.limitUntil <= this.now()) {
-      this.limitUntil = 0;
-      this.event('task manager', 'the account\'s limit window has passed; work starts again');
+    for (const [profile, until] of this.limitUntil) {
+      if (until > this.now()) continue;
+      this.limitUntil.delete(profile);
+      this.event('task manager', `the ${profile} profile's limit window has passed; work starts again`);
     }
-    if (!this.quotaHold()) {
-      for (const t of this.store.all()) {
-        if (t.status === 'blocked' && t.blockedOn?.kind === 'quota') {
-          t.status = 'open';
-          t.blockedOn = undefined;
-          this.store.save(t);
-          this.changed(t.id);
-        }
+    for (const t of this.store.all()) {
+      if (t.status === 'blocked' && t.blockedOn?.kind === 'quota' && !this.quotaHoldFor(t.blockedOn.profile)) {
+        t.status = 'open';
+        t.blockedOn = undefined;
+        this.store.save(t);
+        this.changed(t.id);
       }
     }
+  }
+
+  // -------------------------------------------------------------- auto-switch
+  /**
+   * ═══ TASK AGENTS LEAVE A PROFILE THAT IS NEARLY SPENT ═══ (28 Oct 2026, the owner's ask)
+   *
+   * Every tick, for each Claude Code profile a task agent is on: when its 5h or weekly window reaches
+   * limits.auto-switch (95), the agents move to the least-used other logged-in Claude Code profile that is under 80% in
+   * every window (`switchProfile`). Idle agents move at once. A running agent is asked, in its next tool call and tool
+   * result, for a checkpoint (what is done, what is next, where its files are); its run then ends and the task
+   * continues on the new profile from that checkpoint, in a fresh session. One that has not checkpointed in 3 minutes,
+   * or whose profile reaches 98%, or hits its limit, is stopped and the task manager writes the checkpoint from what it
+   * saw (`followSwitches`). A profile is left at most once per window and never gone back to before its window resets.
+   * A run that hits the account's limit outright does the same, instead of every task waiting for the reset.
+   */
+  private autoSwitch(): void {
+    if (this.cfg.autoSwitchAt <= 0) return;
+    this.followSwitches();
+    const now = this.now();
+    const on = new Set(this.store.team().filter((a) => a.provider === 'claude-code' && !a.switchTo).map((a) => a.profile));
+    for (const from of on) {
+      if (this.switches.has(from)) continue;
+      const u = this.usage.get(from);
+      const w = u && !u.metered ? peakWindow(u.windows, now) : undefined;
+      if (!w || w.usedPercent < this.cfg.autoSwitchAt) continue;
+      if ((this.switchedFrom.get(from) ?? 0) > now && serviceSeams.breakFor !== 'flap') continue;
+      this.switchProfile(from, { window: w });
+    }
+  }
+
+  /** The profile the agents of `from` would move to, or why there is none. */
+  private switchTarget(from: string): { to: string; peak: number } | { to?: undefined; why: string } {
+    if (this.cfg.autoSwitchAt <= 0) return { why: 'limits.auto-switch is 0' };
+    if (profileByName(from)?.provider !== 'claude-code') return { why: `${from} is not a Claude Code profile` };
+    const leftUntil = serviceSeams.breakFor === 'flap' ? new Map<string, number>() : this.switchedFrom;
+    return chooseTarget(from, [...this.usage.values()], { now: this.now(), leftUntil });
+  }
+
+  /**
+   * Move every task agent off `from`, keeping its context (a checkpoint on its task) and the project's memory (the new
+   * profile reads the same shared folder). False, with the GM told once per window, when no profile can take them.
+   */
+  private switchProfile(from: string, trigger: { window?: Window; limit?: { until: number; said: string } }): boolean {
+    const now = this.now();
+    const w = trigger.window;
+    const until = trigger.limit?.until ?? (w ? resetOf(w, now) : now + 5 * 3_600_000);
+    const why = trigger.limit
+      ? `the ${from} profile hit its limit ("${trigger.limit.said}"), resetting at ${hhmm(until)}`
+      : `the ${from} profile reached ${Math.round(w?.usedPercent ?? 0)}% of its ${w?.label ?? ''} window, resetting at ${hhmm(until)}`;
+    const target = this.switchTarget(from);
+    const to = target.to ? profileByName(target.to) : undefined;
+    if (!to) {
+      if (this.noTargetSaid.get(from) !== until) {
+        this.noTargetSaid.set(from, until);
+        this.event('task manager', `auto-switch: ${why}, but no profile can take its agents (${'why' in target ? target.why : `${target.to} is gone`})`);
+        this.inbox('quota', `${why[0]!.toUpperCase()}${why.slice(1)}, but no other profile can take its task agents: ${'why' in target ? target.why : `${target.to} is gone`}. They stay on ${from}, and new work on it is held at ${this.cfg.quotaHoldAt}% (limits.quota-hold). Tell the owner: logging another Claude Code profile in, or one dropping under 80%, lets them move.`);
+      }
+      return false;
+    }
+    const memory = this.joinMemory(from, to);
+    // Agents this GM adds from now on are created on the new profile too, not on the spent one.
+    if (resolveAgentProfile(this.meta, this.cfg).profile === from) {
+      const fresh = this.store.meta() ?? this.meta;
+      fresh.profiles = { ...(fresh.profiles ?? {}), agents: to.name };
+      this.meta.profiles = fresh.profiles;
+      this.store.saveMeta(fresh);
+      const reg = findSwarm(this.name);
+      if (reg) saveSwarm({ ...reg, profiles: fresh.profiles });
+    }
+    this.switches.set(from, { to: to.name, why, moved: [], asked: [] });
+    const sw = this.switches.get(from)!;
+    for (const a of this.store.team()) {
+      if (a.profile !== from || a.switchTo) continue;
+      a.switchTo = to.name;
+      a.switchAskedAt = now;
+      a.switchWhy = why;
+      if (this.runAlive(a.name) || a.state === 'working' || a.state === 'compacting') {
+        this.saveAgent(a);
+        sw.asked.push(a.name);
+        this.event('task manager', `${a.name} asked for a checkpoint before moving to ${to.name}: ${why}`, a.taskId);
+        continue;
+      }
+      this.applySwitch(a, 'was not running', a.taskId !== undefined ? this.store.get(a.taskId) : undefined);
+    }
+    this.switchedFrom.set(from, until);
+    try {
+      writeJsonAtomic(this.switchedFile(), Object.fromEntries(this.switchedFrom));
+    } catch {
+      /* kept in memory for this run of the task manager */
+    }
+    const figures = [...this.usage.values()].filter((u) => u.profile === from || u.profile === to.name)
+      .map((u) => `${u.profile} ${watchedWindows(u.windows, now).map((x) => `${x.label} ${Math.round(x.usedPercent)}%`).join(' · ') || 'unknown'}`).join('; ');
+    const moved = sw.moved.map((m) => m.split(' ')[0]);
+    this.inbox('quota', [
+      `Auto-switch: ${why}, so the task agents move from ${from} to ${to.name} (usage: ${figures}).`,
+      moved.length ? `Moved now (not running): ${moved.join(', ')}.` : '',
+      sw.asked.length ? `Asked to write a checkpoint, then continue the same task on ${to.name}: ${sw.asked.join(', ')}${trigger.limit ? ' (stopped at once: the limit is hit)' : `; the task manager writes it for any that have not within ${SWITCH_CHECKPOINT_WAIT_MS / 60_000} minutes, or at ${SWITCH_HARD_LINE}%`}.` : '',
+      `Memory: ${memory}.`,
+      `${from} is not used again before ${hhmm(until)}. No action needed; tell the owner.`,
+    ].filter(Boolean).join(' '));
+    this.event('task manager', `auto-switch ${from} → ${to.name}: ${why}`);
+    this.push({ event: 'team' });
+    // A run on a profile at its limit cannot even write a checkpoint: move those now.
+    if (trigger.limit) this.followSwitches();
+    return true;
+  }
+
+  /** Runs asked to move: moved once they have ended; stopped past the wait, at the hard line or at the limit. */
+  private followSwitches(): void {
+    const now = this.now();
+    for (const a of this.store.team()) {
+      if (!a.switchTo) continue;
+      const t = a.taskId !== undefined ? this.store.get(a.taskId) : undefined;
+      if (!this.runAlive(a.name)) {
+        this.applySwitch(a, 'had no run going', t);
+        continue;
+      }
+      const u = this.usage.get(a.profile);
+      const peak = u ? peakWindow(u.windows, now) : undefined;
+      const waited = now - (a.switchAskedAt ?? now);
+      if ((this.limitUntil.get(a.profile) ?? 0) > now) this.forceSwitch(a, t, `${a.profile} is at its limit`);
+      else if (peak && peak.usedPercent >= SWITCH_HARD_LINE) this.forceSwitch(a, t, `${a.profile} reached ${Math.round(peak.usedPercent)}% of its ${peak.label} window`);
+      else if (waited >= SWITCH_CHECKPOINT_WAIT_MS) this.forceSwitch(a, t, `no checkpoint within ${Math.round(waited / 60_000)} minutes`);
+    }
+    const team = this.store.team();
+    for (const [from, sw] of this.switches) {
+      if (team.some((a) => a.switchTo && a.profile === from)) continue;
+      this.switches.delete(from);
+      if (sw.asked.length) this.inbox('info', `For your awareness, no action needed: the move from ${from} to ${sw.to} is complete. ${sw.moved.join('; ')}.`);
+    }
+  }
+
+  /** Stop a run that has to leave its profile now; write its checkpoint if it has not, and continue the task elsewhere. */
+  private forceSwitch(a: Agent, t: Task | undefined, cause: string): void {
+    const run = t?.runs.find((r) => !r.endedAt && r.agent === a.name);
+    const stats = run ? this.stats(a, run.sessionId ?? a.sessionId) : undefined;
+    const wrote = a.rotateSession;
+    this.killAgent(a.name, `moving to ${a.switchTo}: ${cause}`);
+    a.state = 'idle';
+    a.taskId = undefined;
+    if (t && run) {
+      this.closeRun(t, 'compacted', `profile ${a.profile} → ${a.switchTo}: ${cause}`);
+      if (!wrote) {
+        const files = t.worktree ? ` (worktree ${t.worktree}${t.branch ? `, branch ${t.branch}` : ''})` : '';
+        this.note(t, 'task manager', 'checkpoint', `Automatic checkpoint by the task manager: ${a.name} was moved off the ${a.profile} profile (${a.switchWhy ?? cause}; ${cause}) before it wrote one. ${this.seenText(t, stats) || 'No progress had been reported.'} Decisions and findings so far are in the notes above; files in the folder are as the agent left them${files}. Continue from there and re-check anything half-done.`);
+      }
+      if (t.status === 'in_progress' || (t.status === 'blocked' && t.blockedOn?.kind === 'stalled')) {
+        t.status = 'open';
+        t.blockedOn = undefined;
+        t.dispatchRequested = true;
+      }
+      this.store.save(t);
+    }
+    this.applySwitch(a, wrote ? `wrote its checkpoint and was stopped (${cause})` : `was stopped (${cause}); the task manager wrote the checkpoint from what it saw`, t);
+    this.changed(t?.id);
+  }
+
+  /**
+   * Move an agent asked to switch to its new profile, now. The caller has ended its run (or it had none). Its next run
+   * starts a fresh session there, from the task's latest checkpoint. Says so on the task. The words for the run's end.
+   */
+  private applySwitch(a: Agent, how: string, t?: Task): string | undefined {
+    if (!a.switchTo) return undefined;
+    const from = a.profile;
+    const why = a.switchWhy ?? `the ${from} profile is nearly spent`;
+    const prof = profileByName(a.switchTo);
+    a.switchTo = undefined;
+    a.switchAskedAt = undefined;
+    a.switchWhy = undefined;
+    if (!prof || prof.provider !== 'claude-code') {
+      this.saveAgent(a);
+      return undefined;
+    }
+    this.setProfile(a, prof);
+    a.rotateSession = true;
+    a.compactRequestedAt = undefined;
+    a.contextPct = 0;
+    this.saveAgent(a);
+    this.event('task manager', `agent ${a.name} moved to profile ${prof.name}: ${why}`, t?.id);
+    if (t) {
+      this.note(t, 'task manager', 'context', `Moved from profile ${from} to ${prof.name}: ${why}. ${a.name} ${how}; the task continues on ${prof.name} from its latest checkpoint.`);
+      this.store.save(t);
+      this.changed(t.id);
+    }
+    this.switches.get(from)?.moved.push(`${a.name} ${how}${t ? ` (#${t.id})` : ''}`);
+    this.push({ event: 'team' });
+    return `profile ${from} → ${prof.name}: ${a.name} ${how}`;
+  }
+
+  /**
+   * The new profile reads the project's one shared memory before any agent works there (#2791), and what the spent
+   * profile learned on its own is folded in too. A project that shares none yet starts one for these two profiles, with
+   * a backup first, exactly as `am memory share` would.
+   */
+  private joinMemory(fromName: string, to: Profile): string {
+    const from = profileByName(fromName);
+    try {
+      const did = ensureLinked(this.meta.dir, to);
+      if (did === 'none') {
+        const r = applyShare(this.meta.dir, from ? [from, to] : [to]);
+        return `this project had no shared memory, so ${[from?.name, to.name].filter(Boolean).join(' and ')} now share one${r.backup ? ` (their own folders backed up in ${r.backup})` : ''}`;
+      }
+      if (from) ensureLinked(this.meta.dir, from);
+      if (did === 'linked') return `${to.name} now reads the project's shared memory`;
+      if (did === 'merged') return `${to.name} folded its own notes into the project's shared memory and now reads it`;
+      return `${to.name} already reads the project's shared memory`;
+    } catch (e) {
+      return `${to.name} could not join the project's shared memory (${e instanceof Error ? e.message : String(e)}); its agents work without it until am memory share`;
+    }
+  }
+
+  private switchedFile(): string {
+    return path.join(this.store.paths.dir, 'autoswitch.json');
   }
 
   // ------------------------------------------------------------ memory guard
@@ -1738,7 +2008,7 @@ export class TaskManagerService {
     const d = this.deferred.get(a.name);
     if (d && d.taskId !== t.id) return `${a.name} is set to continue #${d.taskId} first (${d.why})`;
     if (d) return d.why;
-    if (this.quotaHold()) return 'the account is near or at its limit';
+    if (this.quotaHoldFor(a.profile)) return `the ${a.profile} profile is near or at its limit`;
     const block = this.startBlock();
     if (block) return block;
     const busy = t.paths.length ? this.store.all().find((o) => o.status === 'in_progress' && o.id !== t.id && o.paths.length && pathsClash(t.paths, o.paths)) : undefined;
@@ -2030,12 +2300,17 @@ export class TaskManagerService {
    * The 90% line holds even when the agent never gets round to its own checkpoint: end the run,
    * write a checkpoint from what the task manager saw, and continue the task in a fresh session.
    */
-  private forceCheckpoint(a: Agent, t: Task, stats: SessionStats): void {
-    const seen = [
+  /** What the task manager saw of a run, for a checkpoint it writes on the agent's behalf. */
+  private seenText(t: Task, stats: SessionStats | undefined): string {
+    return [
       t.progress ? `Last reported progress: ${t.progress}${t.progressPct !== undefined ? ` (${t.progressPct}%)` : ''}.` : '',
-      stats.lastText ? `The agent's last words: "${stats.lastText}".` : '',
-      stats.recent.length ? `Its most recent actions, latest first: ${stats.recent.slice(0, 6).map((r) => r.text).join('; ')}.` : '',
+      stats?.lastText ? `The agent's last words: "${stats.lastText}".` : '',
+      stats?.recent.length ? `Its most recent actions, latest first: ${stats.recent.slice(0, 6).map((r) => r.text).join('; ')}.` : '',
     ].filter(Boolean).join(' ');
+  }
+
+  private forceCheckpoint(a: Agent, t: Task, stats: SessionStats): void {
+    const seen = this.seenText(t, stats);
     const text = `Automatic checkpoint by the task manager: ${a.name}'s context reached ${stats.contextPct}% without a checkpoint of its own. ${seen || 'No progress had been reported.'} Decisions and findings so far are in the notes above; files in the folder are as the agent left them. Continue from there and re-check anything half-done.`;
     this.killAgent(a.name, `context ${stats.contextPct}%, no checkpoint within the grace period`);
     this.closeRun(t, 'compacted', `context ${stats.contextPct}% → checkpoint by the task manager → fresh session`);
@@ -2352,6 +2627,7 @@ export class TaskManagerService {
         a.state = a.paused ? 'paused' : 'idle';
         a.taskId = undefined;
         this.saveAgent(a);
+        this.applySwitch(a, 'its run had been stopped', t);
       }
       void this.tick();
       return;
@@ -2367,6 +2643,11 @@ export class TaskManagerService {
     }
     run.endedAt = this.now();
     const fresh = this.task(taskId);
+    /** Moving off a spent profile: the move happens now, and the task continues there from its checkpoint (the
+     *  compacted branch below), never with a nudge on the old profile. */
+    const switched = this.applySwitch(a, a.rotateSession ? 'after writing its checkpoint' : 'its run ended before it wrote a checkpoint', fresh);
+    /** The account's limit, and another profile can take the work: the switch runs once this exit is saved. */
+    let switchAfter: { from: string; limit: { until: number; said: string } } | undefined;
     if (fresh.status === 'blocked' && fresh.blockedOn?.kind === 'question') {
       run.exit = 'blocked';
       a.state = 'waiting';
@@ -2387,7 +2668,7 @@ export class TaskManagerService {
       a.taskId = undefined;
     } else if (a.rotateSession) {
       run.exit = 'compacted';
-      run.exitNote = `context ${run.contextPct ?? '?'}% → checkpoint → fresh session`;
+      run.exitNote = switched ?? `context ${run.contextPct ?? '?'}% → checkpoint → fresh session`;
       a.state = 'idle';
       a.contextPct = 0;
       fresh.status = 'open';
@@ -2401,15 +2682,24 @@ export class TaskManagerService {
       a.taskId = undefined;
       a.rotateSession = true;
       if (limit) {
-        // The account, not the task: everything waits for the reset, and the owner hears it once.
-        this.limitUntil = Math.max(this.limitUntil, limit.until);
-        fresh.status = 'blocked';
-        fresh.blockedOn = { kind: 'quota', profile: this.profile.name, resetsAt: limit.until };
-        fresh.resumeTo = 'open';
-        fresh.dispatchRequested = true;
-        if (this.limitSaidFor !== limit.until) {
-          this.limitSaidFor = limit.until;
-          this.inbox('quota', `The ${this.profile.name} profile has hit its limit: "${limit.said}". Every task is waiting for the reset at ${new Date(limit.until).toLocaleTimeString()} and nothing is being retried until then. Tell the owner, and move the agents to another profile if the work cannot wait (am agent move <agent> --profile <name>).`);
+        // The account, not the task: nothing starts on this profile until the reset.
+        this.limitUntil.set(a.profile, Math.max(this.limitUntil.get(a.profile) ?? 0, limit.until));
+        const target = this.switchTarget(a.profile);
+        if (target.to) {
+          // Another profile can take the work: the task continues there instead of waiting for the reset.
+          fresh.status = 'open';
+          fresh.dispatchRequested = true;
+          switchAfter = { from: a.profile, limit };
+        } else {
+          fresh.status = 'blocked';
+          fresh.blockedOn = { kind: 'quota', profile: a.profile, resetsAt: limit.until };
+          fresh.resumeTo = 'open';
+          fresh.dispatchRequested = true;
+          if (this.limitSaidFor !== limit.until) {
+            this.limitSaidFor = limit.until;
+            const none = this.cfg.autoSwitchAt > 0 && a.provider === 'claude-code' ? ` No other profile can take the work (${'why' in target ? target.why : ''}).` : ' Move the agents to another profile if the work cannot wait (am agent move <agent> --profile <name>).';
+            this.inbox('quota', `The ${a.profile} profile has hit its limit: "${limit.said}". Its tasks wait for the reset at ${new Date(limit.until).toLocaleTimeString()} and nothing is retried on it until then. Tell the owner.${none}`);
+          }
         }
       } else {
         fresh.status = 'open';
@@ -2453,10 +2743,16 @@ export class TaskManagerService {
     this.store.save(fresh);
     this.saveAgent(a);
     this.event(a.name, `run ended · ${run.exit}${run.exitNote ? ` · ${run.exitNote}` : ''}`, taskId);
+    if (switchAfter) this.switchProfile(switchAfter.from, { limit: switchAfter.limit });
     this.changed(taskId);
     this.push({ event: 'team' });
     void this.tick();
   }
+}
+
+/** A clock time, as the board writes one. */
+function hhmm(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export function fmtPriority(p: number): string {

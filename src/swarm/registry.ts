@@ -78,6 +78,7 @@ export const CONFIG_KEYS: Array<{ key: string; internal: string; help: string }>
   { key: 'limits.budget-usd', internal: 'budgetUsd', help: 'list-price budget per agent per day; work pauses when it is reached' },
   { key: 'limits.quota-warn', internal: 'quotaWarnAt', help: 'subscription quota % at which you are warned' },
   { key: 'limits.quota-hold', internal: 'quotaHoldAt', help: 'subscription quota % at which new work is held' },
+  { key: 'limits.auto-switch', internal: 'autoSwitchAt', help: "quota % (5h or weekly window) of the agents' profile at which they checkpoint and move to the least-used other Claude Code profile under 80%; 0 = never" },
   { key: 'limits.max-working', internal: 'maxWorking', help: 'task agents working at once per GM; auto-start starts no more and the next task waits' },
   { key: 'limits.mem-hold-gb', internal: 'memHoldGb', help: "GB the agents' scripts may use (their checks, builds and tests; not the agents themselves) before no new agent run starts" },
   { key: 'limits.mem-stop-gb', internal: 'memStopGb', help: "GB above which the memory guard stops the agents' newest scripts until they are back under limits.mem-hold-gb" },

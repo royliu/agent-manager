@@ -465,7 +465,8 @@ model each group runs on and where the choice came from: set for this GM, set wi
 | `agent.context-window` | 200000 | assumed window for models without a `[1m]` marker |
 | `agent.compact-env` | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | environment variable that asks the tool itself to compact at `agent.compact-at` |
 | `limits.budget-usd` | unset | list-price budget per agent per day; work pauses when it is reached |
-| `limits.quota-warn`, `limits.quota-hold` | 80, 95 | subscription quota percentages at which you are warned, and at which new work is held |
+| `limits.quota-warn`, `limits.quota-hold` | 80, 95 | subscription quota percentages at which you are warned, and at which new work on that profile is held |
+| `limits.auto-switch` | 95 | quota percentage (5h or weekly window) of the task agents' profile at which they checkpoint and move to another logged-in Claude Code profile under 80%; 0 = never |
 | `limits.max-working` | 4 | task agents working at once per GM; auto-start starts no more and the next task waits |
 | `limits.mem-hold-gb` | 16 | GB the agents' scripts (checks, builds, tests; not the agents themselves) may use before no new run starts |
 | `limits.mem-stop-gb` | 24 | GB above which the memory guard stops the agents' newest scripts until they are back under `limits.mem-hold-gb` |
@@ -507,6 +508,20 @@ Guard rails: `limits.budget-usd` pauses an agent for the day when its list-price
 the budget; `limits.quota-hold` holds new work when the subscription's quota window is
 nearly used, and `limits.quota-warn` warns you before that. `K` on the board pauses everyone at
 once.
+
+Auto-switch: the task manager also watches the profile(s) the task agents are on. When one reaches
+`limits.auto-switch` (95%) of its 5h or weekly window, its agents move to the other logged-in Claude
+Code profile with the lowest usage, provided it is under 80% in every window. Idle agents move at
+once. A running agent is asked, in its next tool call, for a checkpoint on its task (what is done,
+what is next, where its files are); its run then ends and the same task continues on the new
+profile from that checkpoint. One that has not written it in 3 minutes, or whose profile reaches
+98%, is stopped and the task manager writes the checkpoint from what it saw. The new profile is
+linked to the project's shared memory first (`am memory share`; a project without one starts one
+for the two profiles, backed up first), new agents are created on it, each moved task gets a note
+saying from where, to where and why, and the GM's inbox lists who moved. A profile is left at most
+once per window and not gone back to before its window resets. A run that hits the account's limit
+outright moves the same way instead of waiting for the reset. When no profile qualifies, nobody
+moves and the GM hears why, once. Codex and OpenRouter profiles are never targets.
 
 Memory guard: every five seconds the task manager adds up what the agents' scripts hold — everything
 an agent's session started through its shell, with all of its children, and anything left in that
