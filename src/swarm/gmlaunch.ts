@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import type { Profile } from '../core/config.js';
 import { getProvider, type LaunchSpec } from '../providers/index.js';
 import { amEntry } from './client.js';
@@ -31,7 +32,14 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
       },
       statusLine: { type: 'command', command: hook('status'), padding: 0 },
     });
-    const args = ['--mcp-config', store.paths.mcpConfig, '--settings', store.paths.gmSettings, '--append-system-prompt', prompt];
+    // Portal: the lab's Slack into this conversation, when the GM's record says so (meta.portal).
+    const portal = meta.portal?.enabled ? meta.portal : undefined;
+    let fullPrompt = prompt;
+    if (portal?.instructionsFile) {
+      try { fullPrompt += `\n\n${fs.readFileSync(portal.instructionsFile, 'utf8')}`; } catch { /* Portal not installed here: start without its words */ }
+    }
+    const args = ['--mcp-config', store.paths.mcpConfig, '--settings', store.paths.gmSettings, '--append-system-prompt', fullPrompt];
+    if (portal) args.push('--channels', portal.channel);
     if (gmModel) args.push('--model', gmModel);
     let sessionId: string | undefined;
     // Resume only a conversation that really exists on disk; otherwise start fresh rather than fail.
@@ -45,6 +53,11 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
     }
     const spec = provider.launch(profile.home, args);
     spec.env.AM_GM = meta.name;
+    if (portal) {
+      spec.env.PORTAL_MANAGER = meta.name;
+      spec.env.PORTAL_URL = portal.url;
+      if (portal.secretFile) spec.env.PORTAL_SECRET_FILE = portal.secretFile;
+    }
     return { spec, sessionId };
   }
 

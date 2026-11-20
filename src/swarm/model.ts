@@ -210,6 +210,21 @@ export const SwarmMetaSchema = z.object({
     /** The profile the stored task manager session belongs to: a session cannot be carried to another account. */
     tmSessionOn: z.string().optional(),
   }).optional(),
+  /**
+   * Portal (labs-portal): when on, the GM's Claude Code conversation starts with Portal's bridge, so messages from the
+   * lab's Slack reach it and its replies go back. The plugin must be installed in the GM's folder only
+   * (claude plugin install portal@superpower-labs --scope local) and allowed by the machine's managed settings.
+   */
+  portal: z.object({
+    enabled: z.boolean().default(false),
+    /** The approved bridge to start, as Claude Code names it. */
+    channel: z.string().default('plugin:portal@superpower-labs'),
+    /** Portal's local address and its secret file (the bridge reads the secret; the GM never sees it). */
+    url: z.string().default('http://127.0.0.1:8790'),
+    secretFile: z.string().optional(),
+    /** Extra instructions appended to the GM's own (Portal's plugin/manager-instructions.md). */
+    instructionsFile: z.string().optional(),
+  }).optional(),
 });
 export type SwarmMeta = z.infer<typeof SwarmMetaSchema>;
 
