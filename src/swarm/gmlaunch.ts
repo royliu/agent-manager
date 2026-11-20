@@ -25,15 +25,22 @@ export function buildGmLaunch(meta: SwarmMeta, profile: Profile, cfg: SwarmConfi
 
   if (profile.provider === 'claude-code') {
     const hook = (kind: string) => `"${node}" "${cli}" _hook ${kind} --gm ${meta.name}`;
+    // Portal: the lab's Slack into this conversation, when the GM's record says so (meta.portal). Switched on in this
+    // GM-only settings file, never in the folder's settings, so task agents working in the same folder never load it.
+    const portal = meta.portal?.enabled ? meta.portal : undefined;
+    const [, pluginName, marketplace] = /^plugin:([^@]+)@(.+)$/.exec(portal?.channel ?? '') ?? [];
     writeJsonAtomic(store.paths.gmSettings, {
       hooks: {
         UserPromptSubmit: [{ hooks: [{ type: 'command', command: hook('inbox'), timeout: 10 }] }],
         Stop: [{ hooks: [{ type: 'command', command: hook('stop'), timeout: 10 }] }],
       },
       statusLine: { type: 'command', command: hook('status'), padding: 0 },
+      ...(portal?.pluginDir && pluginName ? {
+        extraKnownMarketplaces: { [marketplace as string]: { source: { source: 'directory', path: portal.pluginDir } } },
+        enabledPlugins: { [`${pluginName}@${marketplace}`]: true },
+      } : {}),
+      ...(portal?.picturesDir ? { permissions: { allow: [`Read(/${portal.picturesDir}/**)`] } } : {}),
     });
-    // Portal: the lab's Slack into this conversation, when the GM's record says so (meta.portal).
-    const portal = meta.portal?.enabled ? meta.portal : undefined;
     let fullPrompt = prompt;
     if (portal?.instructionsFile) {
       try { fullPrompt += `\n\n${fs.readFileSync(portal.instructionsFile, 'utf8')}`; } catch { /* Portal not installed here: start without its words */ }

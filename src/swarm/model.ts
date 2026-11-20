@@ -224,6 +224,11 @@ export const SwarmMetaSchema = z.object({
     secretFile: z.string().optional(),
     /** Extra instructions appended to the GM's own (Portal's plugin/manager-instructions.md). */
     instructionsFile: z.string().optional(),
+    /** Portal's folder (its plugin marketplace), e.g. /home/labs/portal: the plugin is switched on in the GM's own
+     *  settings file from here, so task agents working in the same folder never load it. */
+    pluginDir: z.string().optional(),
+    /** Portal's pictures folder: the GM may read the pictures sent to it without a question. */
+    picturesDir: z.string().optional(),
   }).optional(),
 });
 export type SwarmMeta = z.infer<typeof SwarmMetaSchema>;
